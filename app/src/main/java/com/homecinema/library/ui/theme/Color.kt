@@ -16,6 +16,10 @@ val OledBackground = Color(0xFF000000)
 val OledSurface = Color(0xFF0A0A0A)
 val OledSurfaceVariant = Color(0xFF161616)
 
+// Explicit (rather than relying on Material3's baseline default) so MainActivity can
+// paint the system status/navigation bars with this exact same color.
+val LightBackground = Color(0xFFFFFBFE)
+
 enum class AccentColor(val label: String, val color: Color) {
     GOLD("Золотой", Color(0xFFE6B450)),
     BLUE("Синий", Color(0xFF4C8DFF)),

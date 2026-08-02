@@ -35,6 +35,7 @@ private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
 // "poster.jpg" used at TV show roots - so movies need a broader match than POSTER_NAMES.
 private val MOVIE_POSTER_SUFFIXES = listOf("-poster", "-folder", "-cover", "")
 private val MOVIE_FANART_SUFFIXES = listOf("-fanart", "-backdrop", "-landscape")
+private val EPISODE_THUMB_SUFFIXES = listOf("-thumb")
 private const val MAX_ACTORS = 8
 
 class LibraryScanner(
@@ -171,6 +172,10 @@ class LibraryScanner(
                         ?: videoFile.name.substringBeforeLast('.')
 
                     val epId = hashOf(videoFile.path)
+                    // Kodi/scrapers usually drop a "<episode>-thumb.jpg" next to the video -
+                    // shown in the episode list instead of just the parent show's poster.
+                    val thumbFile = findImageFile(episodeFolder, videoFile.name, emptySet(), EPISODE_THUMB_SUFFIXES)
+                    val thumbLocalPath = thumbFile?.let { cacheImage(it, epId, "") }
                     results.add(
                         MediaItemEntity(
                             id = epId,
@@ -182,7 +187,7 @@ class LibraryScanner(
                             mediaType = MediaType.EPISODE,
                             folderPath = parentPath(videoFile),
                             videoFilePath = videoFile.path,
-                            posterLocalPath = null,
+                            posterLocalPath = thumbLocalPath,
                             lastScanned = System.currentTimeMillis(),
                             sourceId = source.id,
                             parentShowId = id,

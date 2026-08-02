@@ -238,43 +238,47 @@ fun PlayerScreen(itemId: String) {
             update = { view -> view.player = activePlayer }
         )
 
-        // Reserves the bottom strip for the native seek bar/buttons (untouched by this
-        // overlay) and uses the rest of the screen for tap-to-toggle-controls plus
-        // swipe-to-adjust brightness (left half) / volume (right half), MX Player-style.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 80.dp)
-                .pointerInput(activePlayer) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val isLeftSide = down.position.x < size.width / 2f
-                        val startValue = if (isLeftSide) brightness else volume
-                        var totalDrag = 0f
-                        var moved = false
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            val dy = change.previousPosition.y - change.position.y
-                            if (!moved && kotlin.math.abs(change.position.y - down.position.y) > 12f) moved = true
+        // Only present while the native controller is hidden: it's a full-screen overlay,
+        // so if it stayed up while the controller (play/pause/seek buttons, which sit
+        // roughly mid-screen, not just in a bottom strip) is showing, it would eat every
+        // tap meant for those buttons before the AndroidView underneath ever sees it.
+        // Handles tap-to-reveal-controls plus swipe-to-adjust brightness (left half) /
+        // volume (right half), MX Player-style; once controls are visible, native
+        // PlayerView touch handling takes over directly (including tap-to-hide).
+        if (!controllerVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(activePlayer) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val isLeftSide = down.position.x < size.width / 2f
+                            val startValue = if (isLeftSide) brightness else volume
+                            var totalDrag = 0f
+                            var moved = false
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                val dy = change.previousPosition.y - change.position.y
+                                if (!moved && kotlin.math.abs(change.position.y - down.position.y) > 12f) moved = true
+                                if (moved) {
+                                    totalDrag += dy
+                                    change.consume()
+                                    indicatorMode = if (isLeftSide) GestureIndicatorMode.BRIGHTNESS else GestureIndicatorMode.VOLUME
+                                    val newValue = (startValue + totalDrag / size.height).coerceIn(0f, 1f)
+                                    if (isLeftSide) applyBrightness(newValue) else applyVolume(newValue)
+                                }
+                            }
                             if (moved) {
-                                totalDrag += dy
-                                change.consume()
-                                indicatorMode = if (isLeftSide) GestureIndicatorMode.BRIGHTNESS else GestureIndicatorMode.VOLUME
-                                val newValue = (startValue + totalDrag / size.height).coerceIn(0f, 1f)
-                                if (isLeftSide) applyBrightness(newValue) else applyVolume(newValue)
+                                indicatorMode = GestureIndicatorMode.NONE
+                            } else {
+                                playerViewRef?.showController()
                             }
                         }
-                        if (moved) {
-                            indicatorMode = GestureIndicatorMode.NONE
-                        } else {
-                            val view = playerViewRef
-                            if (controllerVisible) view?.hideController() else view?.showController()
-                        }
                     }
-                }
-        )
+            )
+        }
 
         if (indicatorMode != GestureIndicatorMode.NONE) {
             GestureIndicator(

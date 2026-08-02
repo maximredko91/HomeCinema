@@ -57,6 +57,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val themeMode by app.settingsStore.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
     val accentName by app.settingsStore.accentColorNameFlow.collectAsState(initial = "GOLD")
     val autoRescanEnabled by app.settingsStore.autoRescanEnabledFlow.collectAsState(initial = true)
+    val gridColumns by app.settingsStore.gridColumnsFlow.collectAsState(initial = 2)
     var clearingCache by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
 
@@ -144,6 +145,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                         selected = themeMode == ThemeMode.OLED,
                         onSelect = { scope.launch { app.settingsStore.saveThemeMode(ThemeMode.OLED) } }
                     )
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Text("Колонок в сетке", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(2, 3).forEach { count ->
+                        FilterChip(
+                            selected = gridColumns == count,
+                            onClick = { scope.launch { app.settingsStore.setGridColumns(count) } },
+                            label = { Text("$count") }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))

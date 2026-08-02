@@ -3,6 +3,7 @@ package com.homecinema.library.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -46,6 +47,7 @@ class SettingsStore(private val context: Context) {
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val AUTO_RESCAN_ENABLED = booleanPreferencesKey("auto_rescan_enabled")
         val LAST_AUTO_SCAN_AT = longPreferencesKey("last_auto_scan_at")
+        val GRID_COLUMNS = intPreferencesKey("grid_columns")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -135,6 +137,17 @@ class SettingsStore(private val context: Context) {
     suspend fun recordAutoScanNow() {
         context.dataStore.edit { prefs ->
             prefs[Keys.LAST_AUTO_SCAN_AT] = System.currentTimeMillis()
+        }
+    }
+
+    /** Number of columns in the library/collections grid - 2 (bigger posters) or 3 (denser). */
+    val gridColumnsFlow: Flow<Int> = context.dataStore.data.map { prefs ->
+        (prefs[Keys.GRID_COLUMNS] ?: 2).coerceIn(2, 3)
+    }
+
+    suspend fun setGridColumns(columns: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.GRID_COLUMNS] = columns.coerceIn(2, 3)
         }
     }
 }

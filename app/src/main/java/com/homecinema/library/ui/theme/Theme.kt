@@ -16,6 +16,15 @@ fun resolveDarkTheme(mode: ThemeMode, systemInDarkTheme: Boolean): Boolean = whe
     ThemeMode.SYSTEM -> systemInDarkTheme
 }
 
+/** The exact background color HomeCinemaTheme resolves to for [mode], for painting the
+ * system status/navigation bars to match instead of leaving them their OS default (often
+ * a stark white that clashes with a dark theme). */
+fun backgroundColorFor(mode: ThemeMode, systemInDarkTheme: Boolean): Color = when {
+    !resolveDarkTheme(mode, systemInDarkTheme) -> LightBackground
+    mode == ThemeMode.OLED -> OledBackground
+    else -> CinemaBackground
+}
+
 private fun onColorFor(background: Color): Color =
     if (background.luminance() > 0.5f) Color.Black else Color.White
 
@@ -44,6 +53,8 @@ fun HomeCinemaTheme(
         )
     } else {
         lightColorScheme(
+            background = LightBackground,
+            surface = LightBackground,
             primary = accent.color,
             secondary = accent.color,
             onPrimary = onAccent,

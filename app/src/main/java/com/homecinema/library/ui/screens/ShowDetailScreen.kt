@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -185,73 +186,85 @@ private fun EpisodeRow(
     onCancelDownload: () -> Unit,
     onDeleteDownload: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    val progressFraction = if (episode.durationMs > 0) {
+        (episode.playbackPositionMs.toFloat() / episode.durationMs).coerceIn(0f, 1f)
+    } else 0f
+
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Box(
+            modifier = Modifier
+                .width(120.dp)
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            if (episode.posterLocalPath != null) {
+                AsyncImage(
+                    model = episode.posterLocalPath,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            if (progressFraction > 0.02f) {
+                LinearProgressIndicator(
+                    progress = progressFraction,
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Black.copy(alpha = 0.4f)
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
             Text(
                 "Серия ${episode.episodeNumber ?: "?"}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary
             )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(episode.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f, fill = false))
-            val progressFraction = if (episode.durationMs > 0) {
-                (episode.playbackPositionMs.toFloat() / episode.durationMs).coerceIn(0f, 1f)
-            } else 0f
-            if (progressFraction >= 0.95f) {
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    Icons.Default.Visibility,
-                    contentDescription = "Просмотрено",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(episode.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f, fill = false))
+                if (progressFraction >= 0.95f) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Default.Visibility,
+                        contentDescription = "Просмотрено",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (episode.plot.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    episode.plot,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    maxLines = 2
                 )
             }
-        }
-        if (episode.plot.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                episode.plot,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                maxLines = 2
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onPlay) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Смотреть")
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onPlayExternally) {
+                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Внешний плеер")
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            DownloadControlRow(
+                item = episode,
+                liveProgress = liveProgress,
+                onDownload = onDownload,
+                onCancel = onCancelDownload,
+                onDelete = onDeleteDownload
             )
         }
-        run {
-            val progressFraction = if (episode.durationMs > 0) {
-                (episode.playbackPositionMs.toFloat() / episode.durationMs).coerceIn(0f, 1f)
-            } else 0f
-            if (progressFraction in 0.02f..0.95f) {
-                Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = progressFraction,
-                    modifier = Modifier.fillMaxWidth().height(3.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onPlay) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Смотреть")
-            }
-            Spacer(Modifier.width(8.dp))
-            TextButton(onClick = onPlayExternally) {
-                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Внешний плеер")
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        DownloadControlRow(
-            item = episode,
-            liveProgress = liveProgress,
-            onDownload = onDownload,
-            onCancel = onCancelDownload,
-            onDelete = onDeleteDownload
-        )
     }
 }

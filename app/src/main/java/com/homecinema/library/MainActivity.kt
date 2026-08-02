@@ -11,12 +11,14 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.homecinema.library.data.settings.ThemeMode
 import com.homecinema.library.ui.navigation.AppNavHost
 import com.homecinema.library.ui.theme.AccentColor
 import com.homecinema.library.ui.theme.HomeCinemaTheme
+import com.homecinema.library.ui.theme.backgroundColorFor
 import com.homecinema.library.ui.theme.resolveDarkTheme
 
 class MainActivity : ComponentActivity() {
@@ -34,7 +36,9 @@ private fun HomeCinemaRoot() {
     val themeMode by app.settingsStore.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
     val accentName by app.settingsStore.accentColorNameFlow.collectAsState(initial = "GOLD")
     val accent = AccentColor.fromName(accentName)
-    val isDark = resolveDarkTheme(themeMode, isSystemInDarkTheme())
+    val systemInDarkTheme = isSystemInDarkTheme()
+    val isDark = resolveDarkTheme(themeMode, systemInDarkTheme)
+    val barColor = backgroundColorFor(themeMode, systemInDarkTheme).toArgb()
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -43,6 +47,12 @@ private fun HomeCinemaRoot() {
             val controller = WindowCompat.getInsetsController(window, view)
             controller.isAppearanceLightStatusBars = !isDark
             controller.isAppearanceLightNavigationBars = !isDark
+            // Paint the bars to match the theme background instead of leaving them at
+            // the OS default (often a stark white that clashes with a dark theme).
+            @Suppress("DEPRECATION")
+            window.statusBarColor = barColor
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = barColor
         }
     }
 

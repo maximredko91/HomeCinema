@@ -34,7 +34,7 @@ fun MediaPosterCard(
 
     Column(
         modifier = modifier
-            .width(140.dp)
+            .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
         Box(

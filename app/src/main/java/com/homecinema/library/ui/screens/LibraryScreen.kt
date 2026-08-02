@@ -1,6 +1,11 @@
 package com.homecinema.library.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -8,6 +13,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
@@ -17,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -66,8 +74,13 @@ fun LibraryScreen(
     val availableGenres by viewModel.availableGenres.collectAsState()
     val yearRange by viewModel.yearRange.collectAsState()
     val availableYearBounds by viewModel.availableYearBounds.collectAsState()
+    val gridColumns by viewModel.gridColumns.collectAsState()
 
     var sortMenuOpen by remember { mutableStateOf(false) }
+    // Hoisted here (rather than inside CollectionsGrid) because LibraryScreen itself stays
+    // mounted while browsing into and out of a collection - a state remembered inside
+    // CollectionsGrid would reset every time that composable unmounts/remounts.
+    val collectionsGridState = rememberLazyGridState()
 
     // Without this, the system back gesture/button falls straight through to the
     // Activity (LibraryScreen is the nav graph's start destination, so there's no
@@ -145,6 +158,8 @@ fun LibraryScreen(
                 libraryTab == LibraryTab.COLLECTIONS && selectedCollection == null -> CollectionsGrid(
                     configured = configured,
                     collections = collections,
+                    gridColumns = gridColumns,
+                    gridState = collectionsGridState,
                     onOpenSettings = onOpenSettings,
                     onSelectCollection = viewModel::selectCollection
                 )
@@ -156,6 +171,7 @@ fun LibraryScreen(
                     query = query,
                     sortOrder = sortOrder,
                     alphabetIndexEnabled = alphabetIndexEnabled,
+                    gridColumns = gridColumns,
                     inCollection = selectedCollection != null,
                     selectedGenre = selectedGenre,
                     availableGenres = availableGenres,
@@ -184,6 +200,7 @@ private fun LibraryGrid(
     query: String,
     sortOrder: SortOrder,
     alphabetIndexEnabled: Boolean,
+    gridColumns: Int,
     inCollection: Boolean,
     selectedGenre: String?,
     availableGenres: List<String>,
@@ -201,20 +218,45 @@ private fun LibraryGrid(
     val scope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
 
-    if (configured) {
-        SearchField(query = query, onQueryChange = onSetQuery)
+    // Search + filters slide away while scrolling down through a long list (more room for
+    // posters) and slide back as soon as the user scrolls back up, like most feed UIs.
+    var headerVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(gridState) {
+        var previousIndex = gridState.firstVisibleItemIndex
+        var previousOffset = gridState.firstVisibleItemScrollOffset
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val scrolledDown = index > previousIndex || (index == previousIndex && offset > previousOffset)
+                val scrolledUp = index < previousIndex || (index == previousIndex && offset < previousOffset)
+                if (scrolledDown && (index > 0 || offset > 100)) headerVisible = false
+                else if (scrolledUp) headerVisible = true
+                previousIndex = index
+                previousOffset = offset
+            }
     }
-    if (!inCollection) {
-        FilterRow(current = filter, onSelect = onSetFilter)
-        if (availableGenres.isNotEmpty() || availableYearBounds != null) {
-            AdvancedFilterRow(
-                selectedGenre = selectedGenre,
-                availableGenres = availableGenres,
-                yearRange = yearRange,
-                availableYearBounds = availableYearBounds,
-                onSetGenre = onSetGenre,
-                onSetYearRange = onSetYearRange
-            )
+
+    AnimatedVisibility(
+        visible = headerVisible,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut()
+    ) {
+        Column {
+            if (configured) {
+                SearchField(query = query, onQueryChange = onSetQuery)
+            }
+            if (!inCollection) {
+                FilterRow(current = filter, onSelect = onSetFilter)
+                if (availableGenres.isNotEmpty() || availableYearBounds != null) {
+                    AdvancedFilterRow(
+                        selectedGenre = selectedGenre,
+                        availableGenres = availableGenres,
+                        yearRange = yearRange,
+                        availableYearBounds = availableYearBounds,
+                        onSetGenre = onSetGenre,
+                        onSetYearRange = onSetYearRange
+                    )
+                }
+            }
         }
     }
 
@@ -252,7 +294,7 @@ private fun LibraryGrid(
                 )
                 else -> LazyVerticalGrid(
                     state = gridState,
-                    columns = GridCells.Adaptive(minSize = 130.dp),
+                    columns = GridCells.Fixed(gridColumns),
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -270,6 +312,12 @@ private fun LibraryGrid(
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
+
+            ScrollJumpButtons(
+                gridState = gridState,
+                itemCount = items.size,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+            )
         }
 
         if (showAlphabetBar) {
@@ -287,6 +335,8 @@ private fun LibraryGrid(
 private fun CollectionsGrid(
     configured: Boolean,
     collections: List<CollectionSummary>,
+    gridColumns: Int,
+    gridState: LazyGridState,
     onOpenSettings: () -> Unit,
     onSelectCollection: (String) -> Unit
 ) {
@@ -303,23 +353,32 @@ private fun CollectionsGrid(
             actionLabel = "Открыть настройки",
             onAction = onOpenSettings
         )
-        else -> LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 130.dp),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(collections, key = { it.name }) { collection ->
-                CollectionCard(collection = collection, onClick = { onSelectCollection(collection.name) })
+        else -> Box(Modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(gridColumns),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(collections, key = { it.name }) { collection ->
+                    CollectionCard(collection = collection, onClick = { onSelectCollection(collection.name) })
+                }
             }
+
+            ScrollJumpButtons(
+                gridState = gridState,
+                itemCount = collections.size,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+            )
         }
     }
 }
 
 @Composable
 private fun CollectionCard(collection: CollectionSummary, onClick: () -> Unit) {
-    Column(modifier = Modifier.width(140.dp).clickable(onClick = onClick)) {
+    Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -349,6 +408,34 @@ private fun CollectionCard(collection: CollectionSummary, onClick: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
         )
+    }
+}
+
+/** Small floating buttons to jump straight to the top or bottom of a long grid. */
+@Composable
+private fun ScrollJumpButtons(
+    gridState: LazyGridState,
+    itemCount: Int,
+    modifier: Modifier = Modifier
+) {
+    val scope = rememberCoroutineScope()
+    val canScrollUp = gridState.canScrollBackward
+    val canScrollDown = gridState.canScrollForward
+    if (!canScrollUp && !canScrollDown) return
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (canScrollUp) {
+            SmallFloatingActionButton(onClick = { scope.launch { gridState.animateScrollToItem(0) } }) {
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "В начало списка")
+            }
+        }
+        if (canScrollDown) {
+            SmallFloatingActionButton(
+                onClick = { scope.launch { gridState.animateScrollToItem((itemCount - 1).coerceAtLeast(0)) } }
+            ) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "В конец списка")
+            }
+        }
     }
 }
 

@@ -142,6 +142,9 @@ class LibraryViewModel : ViewModel() {
     val alphabetIndexEnabled: StateFlow<Boolean> = app.settingsStore.alphabetIndexEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val gridColumns: StateFlow<Int> = app.settingsStore.gridColumnsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2)
+
     init {
         // Best-effort "keep the library fresh" - runs once per app process (this ViewModel
         // lives as long as the start-destination screen does), gated to at most once a day
