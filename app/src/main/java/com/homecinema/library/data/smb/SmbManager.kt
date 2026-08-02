@@ -1,6 +1,6 @@
 package com.homecinema.library.data.smb
 
-import com.homecinema.library.data.settings.SettingsStore
+import com.homecinema.library.data.db.SmbSourceEntity
 import com.homecinema.library.data.settings.SmbConfig
 import jcifs.CIFSContext
 import jcifs.config.PropertyConfiguration
@@ -10,18 +10,30 @@ import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
+
+fun SmbSourceEntity.toSmbConfig(): SmbConfig = SmbConfig(
+    host = host,
+    share = share,
+    rootPath = rootPath,
+    domain = domain,
+    username = username,
+    password = password,
+    guest = guest
+)
 
 /**
- * Thin wrapper around jcifs-ng. Builds an authenticated CIFSContext from the
- * user's saved settings and exposes helpers to list/open files on the share.
+ * Thin wrapper around jcifs-ng. Builds an authenticated CIFSContext per configured
+ * source and exposes helpers to list/open files on the share.
  *
- * Keenetic Titan exposes the attached SSD as a standard SMB2/3 share, so this
- * talks to it exactly like it would to any Windows/NAS share.
+ * A Keenetic Titan (or any other router/NAS) exposes its attached SSD as a standard
+ * SMB2/3 share, so this talks to it exactly like it would to any Windows/NAS share.
+ * Since the library can span several sources at once, contexts are cached per source id
+ * rather than as a single global connection.
  */
-class SmbManager(private val settingsStore: SettingsStore) {
+class SmbManager {
 
-    @Volatile private var cachedContext: CIFSContext? = null
-    @Volatile private var cachedConfig: SmbConfig? = null
+    private val contextCache = ConcurrentHashMap<String, CIFSContext>()
 
     private fun buildContext(config: SmbConfig): CIFSContext {
         val props = Properties().apply {
@@ -43,18 +55,10 @@ class SmbManager(private val settingsStore: SettingsStore) {
         }
     }
 
-    private suspend fun contextFor(config: SmbConfig): CIFSContext {
-        val cached = cachedContext
-        if (cached != null && cachedConfig == config) return cached
-        return withContext(Dispatchers.IO) {
-            buildContext(config).also {
-                cachedContext = it
-                cachedConfig = config
-            }
-        }
-    }
+    private fun contextFor(sourceId: String, config: SmbConfig): CIFSContext =
+        contextCache.getOrPut(sourceId) { buildContext(config) }
 
-    /** Builds the smb:// URL for the configured share root (or a sub-path within it). */
+    /** Builds the smb:// URL for a source's share root (or a sub-path within it). */
     fun rootUrl(config: SmbConfig, subPath: String = ""): String {
         val share = config.share.trim('/')
         val root = config.rootPath.trim('/')
@@ -64,17 +68,13 @@ class SmbManager(private val settingsStore: SettingsStore) {
         return "smb://${config.host}/$share/" + if (joined.isNotBlank()) "$joined/" else ""
     }
 
-    /** Returns the authenticated CIFSContext built from the saved settings, for use by the player. */
-    suspend fun authenticatedContext(): CIFSContext = withContext(Dispatchers.IO) {
-        contextFor(settingsStore.currentConfig())
-    }
+    /** Returns the authenticated CIFSContext for the given source, for use by the player. */
+    suspend fun authenticatedContext(sourceId: String, config: SmbConfig): CIFSContext =
+        withContext(Dispatchers.IO) { contextFor(sourceId, config) }
 
-    /** Opens an SmbFile for a full smb:// path using the current credentials. */
-    suspend fun openFile(path: String): SmbFile = withContext(Dispatchers.IO) {
-        val config = settingsStore.currentConfig()
-        val ctx = contextFor(config)
-        SmbFile(path, ctx)
-    }
+    /** Opens an SmbFile for a full smb:// path using the given source's credentials. */
+    suspend fun openFile(sourceId: String, config: SmbConfig, path: String): SmbFile =
+        withContext(Dispatchers.IO) { SmbFile(path, contextFor(sourceId, config)) }
 
     /** Verifies the share is reachable with the given config. Throws on failure. */
     suspend fun testConnection(config: SmbConfig): Boolean = withContext(Dispatchers.IO) {
@@ -83,9 +83,9 @@ class SmbManager(private val settingsStore: SettingsStore) {
         f.exists() && f.isDirectory
     }
 
-    /** Recursively lists every file under the configured root (used by the scanner). */
-    suspend fun listAllFilesRecursive(config: SmbConfig): List<SmbFile> = withContext(Dispatchers.IO) {
-        val ctx = contextFor(config)
+    /** Recursively lists every file under a source's root (used by the scanner). */
+    suspend fun listAllFilesRecursive(sourceId: String, config: SmbConfig): List<SmbFile> = withContext(Dispatchers.IO) {
+        val ctx = contextFor(sourceId, config)
         val root = SmbFile(rootUrl(config), ctx)
         val out = mutableListOf<SmbFile>()
         walk(root, out)
@@ -103,8 +103,8 @@ class SmbManager(private val settingsStore: SettingsStore) {
         }
     }
 
-    fun invalidateCache() {
-        cachedContext = null
-        cachedConfig = null
+    /** Drops cached connections so edited/removed sources reconnect with fresh credentials. */
+    fun invalidateCache(sourceId: String? = null) {
+        if (sourceId == null) contextCache.clear() else contextCache.remove(sourceId)
     }
 }

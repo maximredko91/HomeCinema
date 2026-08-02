@@ -28,6 +28,17 @@ data class MediaItemEntity(
     val posterLocalPath: String?, // cached poster file on local storage, null if none found
     val lastScanned: Long,
 
+    // Which configured SmbSourceEntity this was scanned from (empty for not-yet-migrated rows).
+    val sourceId: String = "",
+
+    // Extra metadata scraped from the .nfo, shown on the detail screen
+    val fanartLocalPath: String? = null, // cached backdrop/screenshot, null if none found
+    val runtimeMinutes: Int? = null,
+    val country: String? = null,
+    val director: String? = null, // comma-separated, simplest fit for the existing schema
+    val actors: String? = null,   // comma-separated
+    val collectionName: String? = null, // Kodi "movie set" this title belongs to, if any
+
     // Episode hierarchy - only meaningful when mediaType == EPISODE
     val parentShowId: String? = null,
     val season: Int? = null,
@@ -36,5 +47,9 @@ data class MediaItemEntity(
     // Offline download tracking - meaningful for MOVIE / CARTOON / EPISODE
     val localFilePath: String? = null,
     val downloadState: DownloadState = DownloadState.NONE,
-    val downloadProgress: Int = 0 // 0-100
+    val downloadProgress: Int = 0, // 0-100
+
+    // Resume-playback tracking, updated by PlayerScreen as it plays.
+    val playbackPositionMs: Long = 0,
+    val durationMs: Long = 0
 )

@@ -4,14 +4,17 @@ import android.content.Context
 import com.homecinema.library.data.db.LibraryDao
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
+import com.homecinema.library.data.db.SmbSourceDao
+import com.homecinema.library.data.db.SmbSourceEntity
 import com.homecinema.library.data.nfo.EpisodeFilenamePattern
 import com.homecinema.library.data.nfo.NfoData
 import com.homecinema.library.data.nfo.NfoParser
 import com.homecinema.library.data.nfo.looksAnimated
-import com.homecinema.library.data.settings.SettingsStore
 import com.homecinema.library.data.smb.SmbManager
+import com.homecinema.library.data.smb.toSmbConfig
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
@@ -25,11 +28,19 @@ sealed class ScanProgress {
 
 private val VIDEO_EXTENSIONS = setOf("mkv", "mp4", "avi", "mov", "m4v", "ts", "wmv", "webm")
 private val POSTER_NAMES = setOf("poster.jpg", "poster.png", "folder.jpg", "folder.png", "cover.jpg", "cover.png")
+private val FANART_NAMES = setOf("fanart.jpg", "fanart.png", "backdrop.jpg", "backdrop.png", "landscape.jpg", "landscape.png")
+private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
+// Movie folders (Kodi/Radarr convention) usually name artwork after the video file
+// itself, e.g. "Movie (2020)-poster.jpg" or "Movie (2020).jpg", rather than the fixed
+// "poster.jpg" used at TV show roots - so movies need a broader match than POSTER_NAMES.
+private val MOVIE_POSTER_SUFFIXES = listOf("-poster", "-folder", "-cover", "")
+private val MOVIE_FANART_SUFFIXES = listOf("-fanart", "-backdrop", "-landscape")
+private const val MAX_ACTORS = 8
 
 class LibraryScanner(
     private val smbManager: SmbManager,
     private val dao: LibraryDao,
-    private val settingsStore: SettingsStore,
+    private val sourceDao: SmbSourceDao,
     private val context: Context
 ) {
 
@@ -39,8 +50,51 @@ class LibraryScanner(
 
     suspend fun scan(onProgress: (ScanProgress) -> Unit) = withContext(Dispatchers.IO) {
         try {
-            val config = settingsStore.currentConfig()
-            val allFiles = smbManager.listAllFilesRecursive(config)
+            val sources = sourceDao.observeAll().first()
+            if (sources.isEmpty()) {
+                onProgress(ScanProgress.Done(0))
+                return@withContext
+            }
+
+            // A single unreachable source (e.g. a NAS that's asleep) shouldn't block scanning
+            // the rest - that resilience is the whole point of supporting several sources.
+            val allResults = mutableListOf<MediaItemEntity>()
+            for (source in sources) {
+                try {
+                    allResults += scanSource(source, onProgress)
+                } catch (e: Exception) {
+                    onProgress(ScanProgress.Error("«${source.name}»: ${e.message ?: "не удалось просканировать"}"))
+                }
+            }
+
+            // Preserve any existing download/playback progress when re-scanning.
+            val merged = allResults.map { fresh ->
+                val existing = dao.getById(fresh.id)
+                if (existing != null) {
+                    fresh.copy(
+                        localFilePath = existing.localFilePath,
+                        downloadState = existing.downloadState,
+                        downloadProgress = existing.downloadProgress,
+                        playbackPositionMs = existing.playbackPositionMs,
+                        durationMs = existing.durationMs
+                    )
+                } else fresh
+            }
+
+            dao.upsertAll(merged)
+            dao.deleteMissingTopLevel(merged.filter { it.mediaType != MediaType.EPISODE }.map { it.folderPath })
+            dao.deleteMissingEpisodes(merged.filter { it.mediaType == MediaType.EPISODE }.map { it.id })
+
+            onProgress(ScanProgress.Done(merged.size))
+        } catch (e: Exception) {
+            onProgress(ScanProgress.Error(e.message ?: "Unknown error while scanning"))
+        }
+    }
+
+    /** Scans a single configured source and returns its raw results (not yet merged/saved). */
+    private suspend fun scanSource(source: SmbSourceEntity, onProgress: (ScanProgress) -> Unit): List<MediaItemEntity> {
+            val config = source.toSmbConfig()
+            val allFiles = smbManager.listAllFilesRecursive(source.id, config)
             onProgress(ScanProgress.Scanning(allFiles.size))
 
             val byFolder = allFiles.groupBy { parentPath(it) }
@@ -64,13 +118,15 @@ class LibraryScanner(
                 val nfoFile = files.first { it.name.equals("tvshow.nfo", ignoreCase = true) }
                 val nfoData = runCatching { NfoParser.parse(nfoFile.inputStream) }.getOrNull()
                 val posterFile = files.firstOrNull { it.name.lowercase() in POSTER_NAMES }
+                val fanartFile = files.firstOrNull { it.name.lowercase() in FANART_NAMES }
 
                 val id = hashOf(showRoot)
                 val title = nfoData?.title?.takeIf { it.isNotBlank() } ?: showRoot.trimEnd('/').substringAfterLast('/')
                 val mediaType = if (nfoData?.genres.orEmpty().looksAnimated()) MediaType.CARTOON_SERIES else MediaType.TV_SHOW
 
                 onProgress(ScanProgress.Parsing(processed, totalFolders, title))
-                val posterLocalPath = posterFile?.let { cachePoster(it, id) }
+                val posterLocalPath = posterFile?.let { cacheImage(it, id, "") }
+                val fanartLocalPath = fanartFile?.let { cacheImage(it, id, "-fanart") }
 
                 results.add(
                     MediaItemEntity(
@@ -84,7 +140,14 @@ class LibraryScanner(
                         folderPath = showRoot,
                         videoFilePath = "", // shells are not directly playable
                         posterLocalPath = posterLocalPath,
-                        lastScanned = System.currentTimeMillis()
+                        lastScanned = System.currentTimeMillis(),
+                        sourceId = source.id,
+                        fanartLocalPath = fanartLocalPath,
+                        runtimeMinutes = nfoData?.runtimeMinutes,
+                        country = nfoData?.country,
+                        director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
+                        actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
+                        collectionName = nfoData?.collectionName
                     )
                 )
 
@@ -121,6 +184,7 @@ class LibraryScanner(
                             videoFilePath = videoFile.path,
                             posterLocalPath = null,
                             lastScanned = System.currentTimeMillis(),
+                            sourceId = source.id,
                             parentShowId = id,
                             season = season,
                             episodeNumber = episodeNum
@@ -141,7 +205,8 @@ class LibraryScanner(
                     ?: return@forEachIndexed // no playable video here, skip folder
 
                 val nfoFile = files.firstOrNull { it.name.endsWith(".nfo", ignoreCase = true) }
-                val posterFile = files.firstOrNull { it.name.lowercase() in POSTER_NAMES }
+                val posterFile = findImageFile(files, videoFile.name, POSTER_NAMES, MOVIE_POSTER_SUFFIXES)
+                val fanartFile = findImageFile(files, videoFile.name, FANART_NAMES, MOVIE_FANART_SUFFIXES)
                 val nfoData = nfoFile?.let { f -> runCatching { NfoParser.parse(f.inputStream) }.getOrNull() }
 
                 val id = hashOf(folderPath)
@@ -149,7 +214,8 @@ class LibraryScanner(
                 val mediaType = if (nfoData?.genres.orEmpty().looksAnimated()) MediaType.CARTOON else MediaType.MOVIE
 
                 onProgress(ScanProgress.Parsing(processed, totalFolders, title))
-                val posterLocalPath = posterFile?.let { cachePoster(it, id) }
+                val posterLocalPath = posterFile?.let { cacheImage(it, id, "") }
+                val fanartLocalPath = fanartFile?.let { cacheImage(it, id, "-fanart") }
 
                 results.add(
                     MediaItemEntity(
@@ -163,37 +229,25 @@ class LibraryScanner(
                         folderPath = folderPath,
                         videoFilePath = videoFile.path,
                         posterLocalPath = posterLocalPath,
-                        lastScanned = System.currentTimeMillis()
+                        lastScanned = System.currentTimeMillis(),
+                        sourceId = source.id,
+                        fanartLocalPath = fanartLocalPath,
+                        runtimeMinutes = nfoData?.runtimeMinutes,
+                        country = nfoData?.country,
+                        director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
+                        actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
+                        collectionName = nfoData?.collectionName
                     )
                 )
             }
 
-            // Preserve any existing download progress/state when re-scanning.
-            val merged = results.map { fresh ->
-                val existing = dao.getById(fresh.id)
-                if (existing != null) {
-                    fresh.copy(
-                        localFilePath = existing.localFilePath,
-                        downloadState = existing.downloadState,
-                        downloadProgress = existing.downloadProgress
-                    )
-                } else fresh
-            }
-
-            dao.upsertAll(merged)
-            dao.deleteMissingTopLevel(merged.filter { it.mediaType != MediaType.EPISODE }.map { it.folderPath })
-            dao.deleteMissingEpisodes(merged.filter { it.mediaType == MediaType.EPISODE }.map { it.id })
-
-            onProgress(ScanProgress.Done(merged.size))
-        } catch (e: Exception) {
-            onProgress(ScanProgress.Error(e.message ?: "Unknown error while scanning"))
-        }
+            return results
     }
 
-    private fun cachePoster(smbFile: SmbFile, id: String): String? {
+    private fun cacheImage(smbFile: SmbFile, id: String, suffix: String): String? {
         return try {
             val ext = extensionOf(smbFile.name).ifBlank { "jpg" }
-            val dest = File(posterCacheDir, "$id.$ext")
+            val dest = File(posterCacheDir, "$id$suffix.$ext")
             smbFile.inputStream.use { input ->
                 dest.outputStream().use { output -> input.copyTo(output) }
             }
@@ -210,6 +264,28 @@ class LibraryScanner(
 
     private fun extensionOf(name: String): String =
         name.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+
+    /**
+     * Finds a poster/fanart image for a standalone movie or cartoon folder. Tries the
+     * fixed TV-show-style names first, then falls back to names derived from the video
+     * file's own basename, which is how movie artwork is conventionally named.
+     */
+    private fun findImageFile(
+        files: List<SmbFile>,
+        videoFileName: String,
+        fixedNames: Set<String>,
+        suffixes: List<String>
+    ): SmbFile? {
+        files.firstOrNull { it.name.lowercase() in fixedNames }?.let { return it }
+
+        val base = videoFileName.substringBeforeLast('.').lowercase()
+        return files.firstOrNull { f ->
+            val ext = extensionOf(f.name)
+            if (ext !in IMAGE_EXTENSIONS) return@firstOrNull false
+            val nameWithoutExt = f.name.lowercase().removeSuffix(".$ext")
+            suffixes.any { suffix -> nameWithoutExt == base + suffix }
+        }
+    }
 
     private fun hashOf(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())

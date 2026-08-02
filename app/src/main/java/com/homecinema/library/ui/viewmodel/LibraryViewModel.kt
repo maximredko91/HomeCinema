@@ -10,9 +10,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+private val AUTO_RESCAN_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
 /** UI filter for the library grid - "null" means "show everything". */
 enum class LibraryFilter(val types: Set<MediaType>?) {
@@ -23,6 +26,20 @@ enum class LibraryFilter(val types: Set<MediaType>?) {
     CARTOON_SERIES(setOf(MediaType.CARTOON_SERIES))
 }
 
+enum class SortOrder(val label: String) {
+    TITLE("По названию"),
+    YEAR("По году"),
+    GENRE("По жанру")
+}
+
+enum class LibraryTab { ALL, COLLECTIONS }
+
+data class CollectionSummary(
+    val name: String,
+    val posterPath: String?,
+    val count: Int
+)
+
 class LibraryViewModel : ViewModel() {
     private val app: HomeCinemaApp get() = HomeCinemaApp.instance
 
@@ -32,20 +49,145 @@ class LibraryViewModel : ViewModel() {
     private val _filter = MutableStateFlow(LibraryFilter.ALL)
     val filter: StateFlow<LibraryFilter> = _filter
 
-    val items: StateFlow<List<MediaItemEntity>> = combine(allItems, _filter) { items, filter ->
-        val types = filter.types
-        if (types == null) items else items.filter { it.mediaType in types }
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query
+
+    private val _sortOrder = MutableStateFlow(SortOrder.TITLE)
+    val sortOrder: StateFlow<SortOrder> = _sortOrder
+
+    private val _libraryTab = MutableStateFlow(LibraryTab.ALL)
+    val libraryTab: StateFlow<LibraryTab> = _libraryTab
+
+    private val _selectedCollection = MutableStateFlow<String?>(null)
+    val selectedCollection: StateFlow<String?> = _selectedCollection
+
+    private val _selectedGenre = MutableStateFlow<String?>(null)
+    val selectedGenre: StateFlow<String?> = _selectedGenre
+
+    private val _yearRange = MutableStateFlow<IntRange?>(null)
+    val yearRange: StateFlow<IntRange?> = _yearRange
+
+    /** All distinct genres in the library, for the genre filter picker. */
+    val availableGenres: StateFlow<List<String>> = allItems.map { items ->
+        items.flatMap { it.genres.split(",").map { g -> g.trim() } }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Min/max release year across the library, as bounds for the year-range picker. */
+    val availableYearBounds: StateFlow<IntRange?> = allItems.map { items ->
+        val years = items.mapNotNull { it.year }
+        if (years.isEmpty()) null else years.min()..years.max()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** Movies/cartoons grouped by their Kodi "movie set", for the Коллекции tab. */
+    val collections: StateFlow<List<CollectionSummary>> = allItems.map { items ->
+        items.filter { !it.collectionName.isNullOrBlank() }
+            .groupBy { it.collectionName!! }
+            .map { (name, group) ->
+                CollectionSummary(
+                    name = name,
+                    posterPath = group.firstOrNull { it.posterLocalPath != null }?.posterLocalPath,
+                    count = group.size
+                )
+            }
+            .sortedBy { it.name }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private data class BaseFilterState(
+        val items: List<MediaItemEntity>,
+        val filter: LibraryFilter,
+        val query: String,
+        val sortOrder: SortOrder,
+        val collection: String?
+    )
+
+    private val baseFilterState = combine(
+        allItems, _filter, _query, _sortOrder, _selectedCollection
+    ) { items, filter, query, sort, collection -> BaseFilterState(items, filter, query, sort, collection) }
+
+    val items: StateFlow<List<MediaItemEntity>> = combine(
+        baseFilterState, _selectedGenre, _yearRange
+    ) { base, genre, years ->
+        val types = base.filter.types
+        var result = if (types == null) base.items else base.items.filter { it.mediaType in types }
+        if (base.query.isNotBlank()) result = result.filter { item ->
+            item.title.contains(base.query, ignoreCase = true) ||
+                item.plot.contains(base.query, ignoreCase = true) ||
+                item.actors?.contains(base.query, ignoreCase = true) == true ||
+                item.director?.contains(base.query, ignoreCase = true) == true
+        }
+        if (base.collection != null) result = result.filter { it.collectionName == base.collection }
+        if (genre != null) result = result.filter { item ->
+            item.genres.split(",").map { it.trim() }.any { it.equals(genre, ignoreCase = true) }
+        }
+        if (years != null) result = result.filter { item -> item.year != null && item.year in years }
+        when (base.sortOrder) {
+            SortOrder.TITLE -> result.sortedBy { it.title }
+            SortOrder.YEAR -> result.sortedWith(compareByDescending<MediaItemEntity> { it.year ?: 0 }.thenBy { it.title })
+            SortOrder.GENRE -> result.sortedWith(
+                compareBy<MediaItemEntity> { it.genres.substringBefore(",").trim().ifBlank { "￿" } }.thenBy { it.title }
+            )
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _scanProgress = MutableStateFlow<ScanProgress?>(null)
     val scanProgress: StateFlow<ScanProgress?> = _scanProgress
 
-    val isConfigured: StateFlow<Boolean> = app.settingsStore.configFlow
-        .map { it.isConfigured }
+    val isConfigured: StateFlow<Boolean> = app.repository.observeSources()
+        .map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val alphabetIndexEnabled: StateFlow<Boolean> = app.settingsStore.alphabetIndexEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    init {
+        // Best-effort "keep the library fresh" - runs once per app process (this ViewModel
+        // lives as long as the start-destination screen does), gated to at most once a day
+        // so it doesn't hammer the share every time the library screen recomposes.
+        viewModelScope.launch {
+            val autoEnabled = app.settingsStore.autoRescanEnabledFlow.first()
+            val configured = app.repository.observeSources().first().isNotEmpty()
+            val lastScan = app.settingsStore.lastAutoScanAtFlow.first()
+            if (autoEnabled && configured && System.currentTimeMillis() - lastScan > AUTO_RESCAN_INTERVAL_MS) {
+                app.settingsStore.recordAutoScanNow()
+                rescan()
+            }
+        }
+    }
 
     fun setFilter(filter: LibraryFilter) {
         _filter.value = filter
+    }
+
+    fun setQuery(query: String) {
+        _query.value = query
+    }
+
+    fun setSortOrder(order: SortOrder) {
+        _sortOrder.value = order
+    }
+
+    fun setLibraryTab(tab: LibraryTab) {
+        _libraryTab.value = tab
+        if (tab == LibraryTab.ALL) _selectedCollection.value = null
+    }
+
+    fun selectCollection(name: String) {
+        _selectedCollection.value = name
+    }
+
+    fun clearCollectionSelection() {
+        _selectedCollection.value = null
+    }
+
+    fun setGenre(genre: String?) {
+        _selectedGenre.value = genre
+    }
+
+    fun setYearRange(range: IntRange?) {
+        _yearRange.value = range
     }
 
     fun rescan() {

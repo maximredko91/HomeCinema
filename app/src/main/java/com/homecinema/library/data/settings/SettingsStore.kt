@@ -1,7 +1,9 @@
 package com.homecinema.library.data.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +28,8 @@ data class SmbConfig(
 
 enum class PlaybackMode { INTERNAL, EXTERNAL, ASK }
 
+enum class ThemeMode { SYSTEM, LIGHT, DARK, OLED }
+
 class SettingsStore(private val context: Context) {
 
     private object Keys {
@@ -37,6 +41,11 @@ class SettingsStore(private val context: Context) {
         val PASSWORD = stringPreferencesKey("smb_password")
         val GUEST = stringPreferencesKey("smb_guest")
         val PLAYBACK_MODE = stringPreferencesKey("playback_mode")
+        val ALPHABET_INDEX_ENABLED = booleanPreferencesKey("alphabet_index_enabled")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        val AUTO_RESCAN_ENABLED = booleanPreferencesKey("auto_rescan_enabled")
+        val LAST_AUTO_SCAN_AT = longPreferencesKey("last_auto_scan_at")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -73,6 +82,59 @@ class SettingsStore(private val context: Context) {
     suspend fun savePlaybackMode(mode: PlaybackMode) {
         context.dataStore.edit { prefs ->
             prefs[Keys.PLAYBACK_MODE] = mode.name
+        }
+    }
+
+    val alphabetIndexEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ALPHABET_INDEX_ENABLED] ?: true
+    }
+
+    suspend fun setAlphabetIndexEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.ALPHABET_INDEX_ENABLED] = enabled
+        }
+    }
+
+    val themeModeFlow: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
+        runCatching { ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: "SYSTEM") }
+            .getOrDefault(ThemeMode.SYSTEM)
+    }
+
+    suspend fun saveThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.THEME_MODE] = mode.name
+        }
+    }
+
+    /** Stored as a plain string key (not the Compose Color itself) to keep this data-layer
+     * class free of UI dependencies - the ui.theme.AccentColor enum owns the actual colors. */
+    val accentColorNameFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ACCENT_COLOR] ?: "GOLD"
+    }
+
+    suspend fun saveAccentColorName(name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.ACCENT_COLOR] = name
+        }
+    }
+
+    val autoRescanEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.AUTO_RESCAN_ENABLED] ?: true
+    }
+
+    suspend fun setAutoRescanEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.AUTO_RESCAN_ENABLED] = enabled
+        }
+    }
+
+    val lastAutoScanAtFlow: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LAST_AUTO_SCAN_AT] ?: 0L
+    }
+
+    suspend fun recordAutoScanNow() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LAST_AUTO_SCAN_AT] = System.currentTimeMillis()
         }
     }
 }

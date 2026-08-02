@@ -48,4 +48,7 @@ interface LibraryDao {
 
     @Query("UPDATE media_items SET downloadState = :state, downloadProgress = :progress, localFilePath = :localPath WHERE id = :id")
     suspend fun updateDownloadResult(id: String, state: DownloadState, progress: Int, localPath: String?)
+
+    @Query("UPDATE media_items SET playbackPositionMs = :positionMs, durationMs = :durationMs WHERE id = :id")
+    suspend fun updatePlaybackProgress(id: String, positionMs: Long, durationMs: Long)
 }

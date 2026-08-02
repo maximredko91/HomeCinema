@@ -16,7 +16,13 @@ data class NfoData(
     val rootTag: String? = null,
     // only present in episodedetails.nfo
     val season: Int? = null,
-    val episode: Int? = null
+    val episode: Int? = null,
+    val runtimeMinutes: Int? = null,
+    val country: String? = null,
+    val directors: List<String> = emptyList(),
+    val actors: List<String> = emptyList(),
+    // from <set><name>...</name></set> - the Kodi "movie set" this title belongs to
+    val collectionName: String? = null
 )
 
 private val ANIMATION_KEYWORDS = listOf("animation", "аним", "мультф", "cartoon", "anime")
@@ -51,20 +57,28 @@ object NfoParser {
         var rating: Double? = null
         var season: Int? = null
         var episode: Int? = null
+        var runtimeMinutes: Int? = null
+        var country: String? = null
+        val directors = mutableListOf<String>()
+        val actors = mutableListOf<String>()
+        var collectionName: String? = null
 
-        // <episodedetails> nfo files can contain a <season>/<episode> tag directly,
-        // or nest them inside <uniqueid type="..."> variants depending on the scraper.
-        var currentTag: String? = null
+        // A tag stack (rather than a single "current tag") is needed to tell apart
+        // same-named leaf tags that mean different things depending on their parent,
+        // e.g. <set><name> (collection name) vs <actor><name> (cast member name).
+        val tagStack = ArrayDeque<String>()
         var eventType = parser.eventType
         while (eventType != XmlPullParser.END_DOCUMENT) {
             when (eventType) {
                 XmlPullParser.START_TAG -> {
-                    currentTag = parser.name
+                    tagStack.addLast(parser.name)
                     if (rootTag == null) rootTag = parser.name
                 }
                 XmlPullParser.TEXT -> {
                     val value = parser.text?.trim().orEmpty()
                     if (value.isNotEmpty()) {
+                        val currentTag = tagStack.lastOrNull()
+                        val parentTag = if (tagStack.size >= 2) tagStack[tagStack.size - 2] else null
                         when (currentTag) {
                             "title" -> if (title == null) title = value
                             "originaltitle" -> if (originalTitle == null) originalTitle = value
@@ -74,10 +88,17 @@ object NfoParser {
                             "rating", "value" -> rating = value.toDoubleOrNull() ?: rating
                             "season" -> season = value.toIntOrNull() ?: season
                             "episode" -> episode = value.toIntOrNull() ?: episode
+                            "runtime" -> runtimeMinutes = value.toIntOrNull() ?: runtimeMinutes
+                            "country" -> if (country == null) country = value
+                            "director" -> directors.add(value)
+                            "name" -> when (parentTag) {
+                                "set" -> collectionName = value
+                                "actor" -> actors.add(value)
+                            }
                         }
                     }
                 }
-                XmlPullParser.END_TAG -> currentTag = null
+                XmlPullParser.END_TAG -> tagStack.removeLastOrNull()
             }
             eventType = parser.next()
         }
@@ -91,7 +112,12 @@ object NfoParser {
             rating = rating,
             rootTag = rootTag,
             season = season,
-            episode = episode
+            episode = episode,
+            runtimeMinutes = runtimeMinutes,
+            country = country,
+            directors = directors.distinct(),
+            actors = actors.distinct(),
+            collectionName = collectionName?.takeIf { it.isNotBlank() }
         )
     }
 }

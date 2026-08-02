@@ -24,6 +24,7 @@ import coil.compose.AsyncImage
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
+import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.ui.components.DownloadControlRow
 import kotlinx.coroutines.launch
 import java.io.File
@@ -42,6 +43,7 @@ fun DetailScreen(
 
     val item by app.repository.observeById(itemId).collectAsState(initial = null)
     val liveProgressMap by app.downloadManager.liveProgress.collectAsState()
+    val playbackMode by app.settingsStore.playbackModeFlow.collectAsState(initial = PlaybackMode.ASK)
 
     Scaffold(
         topBar = {
@@ -63,8 +65,19 @@ fun DetailScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
         ) {
+            if (current.fanartLocalPath != null) {
+                AsyncImage(
+                    model = current.fanartLocalPath,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                )
+            }
+
+            Column(modifier = Modifier.padding(20.dp)) {
             Row {
                 Box(
                     modifier = Modifier
@@ -89,6 +102,8 @@ fun DetailScreen(
                     val meta = buildList {
                         current.year?.let { add(it.toString()) }
                         current.rating?.let { add("★ ${"%.1f".format(it)}") }
+                        current.runtimeMinutes?.let { add("$it мин") }
+                        current.country?.takeIf { it.isNotBlank() }?.let { add(it) }
                     }.joinToString("  •  ")
                     if (meta.isNotBlank()) {
                         Text(meta, style = MaterialTheme.typography.bodyMedium)
@@ -112,16 +127,26 @@ fun DetailScreen(
                 }
             } else {
                 Row {
-                    Button(onClick = { onPlayInternally(current.id) }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Смотреть")
+                    if (playbackMode != PlaybackMode.EXTERNAL) {
+                        Button(onClick = { onPlayInternally(current.id) }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Смотреть")
+                        }
+                    } else {
+                        Button(onClick = { playExternally(context, current) }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Смотреть во внешнем плеере")
+                        }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    OutlinedButton(onClick = { playExternally(context, current) }) {
-                        Icon(Icons.Default.OpenInNew, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Во внешнем плеере")
+                    if (playbackMode == PlaybackMode.ASK) {
+                        Spacer(Modifier.width(12.dp))
+                        OutlinedButton(onClick = { playExternally(context, current) }) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Во внешнем плеере")
+                        }
                     }
                 }
 
@@ -140,6 +165,21 @@ fun DetailScreen(
                 Text("Описание", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 Text(current.plot, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            if (!current.director.isNullOrBlank()) {
+                Spacer(Modifier.height(16.dp))
+                Text("Режиссёр", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(current.director, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            if (!current.actors.isNullOrBlank()) {
+                Spacer(Modifier.height(16.dp))
+                Text("В ролях", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(current.actors, style = MaterialTheme.typography.bodyMedium)
+            }
             }
         }
     }

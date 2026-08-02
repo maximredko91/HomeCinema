@@ -9,6 +9,7 @@ import com.homecinema.library.data.smb.SmbManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Simple hand-rolled service locator (no Hilt/Dagger to keep the project
@@ -35,10 +36,12 @@ class HomeCinemaApp : Application() {
         instance = this
 
         settingsStore = SettingsStore(this)
-        smbManager = SmbManager(settingsStore)
+        smbManager = SmbManager()
         database = AppDatabase.build(this)
-        repository = LibraryRepository(database.libraryDao(), smbManager, this)
-        downloadManager = DownloadManager(smbManager, database.libraryDao(), this, applicationScope)
+        repository = LibraryRepository(database.libraryDao(), database.smbSourceDao(), smbManager, this)
+        downloadManager = DownloadManager(smbManager, database.libraryDao(), database.smbSourceDao(), this, applicationScope)
+
+        applicationScope.launch { repository.migrateLegacySourceIfNeeded(settingsStore) }
     }
 
     companion object {
