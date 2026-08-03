@@ -49,6 +49,7 @@ import com.homecinema.library.data.db.SmbSourceEntity
 import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.settings.SmbConfig
 import com.homecinema.library.data.settings.ThemeMode
+import com.homecinema.library.data.smb.toSmbUserMessage
 import com.homecinema.library.ui.theme.AccentColor
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
 import com.homecinema.library.ui.theme.glassBorderBrush
@@ -428,8 +429,12 @@ private fun SourceEditDialog(
                         testResult = null
                         val config = SmbConfig(host, share, rootPath, domain, username, password, guest)
                         scope.launch {
-                            val ok = runCatching { app.smbManager.testConnection(config) }.getOrDefault(false)
-                            testResult = if (ok) "Подключение успешно" else "Не удалось подключиться — проверьте адрес и доступ"
+                            testResult = runCatching { app.smbManager.testConnection(config) }.fold(
+                                onSuccess = { ok ->
+                                    if (ok) "Подключение успешно" else "Общая папка не найдена — проверьте её название и путь."
+                                },
+                                onFailure = { e -> e.toSmbUserMessage() }
+                            )
                             testing = false
                         }
                     }

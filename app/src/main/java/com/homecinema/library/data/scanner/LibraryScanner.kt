@@ -13,6 +13,7 @@ import com.homecinema.library.data.nfo.looksAnimated
 import com.homecinema.library.data.smb.SmbManager
 import com.homecinema.library.data.smb.SmbSourceResolver
 import com.homecinema.library.data.smb.toSmbConfig
+import com.homecinema.library.data.smb.toSmbUserMessage
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -90,7 +91,7 @@ class LibraryScanner(
                 try {
                     allResults += scanSource(source, onProgress)
                 } catch (e: Exception) {
-                    errors += "«${source.name}»: ${e.message ?: e::class.simpleName ?: "не удалось просканировать"}"
+                    errors += "«${source.name}»: ${e.toSmbUserMessage()}"
                 }
             }
 
@@ -106,7 +107,7 @@ class LibraryScanner(
                 onProgress(ScanProgress.Done(allResults.size))
             }
         } catch (e: Exception) {
-            onProgress(ScanProgress.Error(e.message ?: "Unknown error while scanning"))
+            onProgress(ScanProgress.Error(e.toSmbUserMessage()))
         }
     }
 
