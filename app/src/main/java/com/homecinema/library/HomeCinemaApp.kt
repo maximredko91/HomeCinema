@@ -11,6 +11,9 @@ import com.homecinema.library.data.security.CredentialStore
 import com.homecinema.library.data.settings.SettingsStore
 import com.homecinema.library.data.smb.SmbManager
 import com.homecinema.library.data.smb.SmbSourceResolver
+import com.homecinema.library.data.update.ReleaseInfo
+import com.homecinema.library.data.update.UpdateChecker
+import com.homecinema.library.data.update.isNewerVersion
 import androidx.core.content.getSystemService
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -20,6 +23,10 @@ import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.Security
@@ -47,6 +54,11 @@ class HomeCinemaApp : Application() {
     lateinit var downloadManager: DownloadManager
         private set
 
+    private val _availableUpdate = MutableStateFlow<ReleaseInfo?>(null)
+    /** Non-null once a newer GitHub Release than the installed version is found and hasn't
+     * been dismissed for that specific version yet - see checkForUpdate(). */
+    val availableUpdate: StateFlow<ReleaseInfo?> = _availableUpdate.asStateFlow()
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -69,8 +81,29 @@ class HomeCinemaApp : Application() {
 
         createDownloadNotificationChannel()
         scheduleAutoRescan()
+        checkForUpdate()
 
         applicationScope.launch { repository.migrateLegacySourceIfNeeded(settingsStore) }
+    }
+
+    /** Distribution is manual (GitHub Releases, no Play Store), so this is the only way
+     * anyone finds out a new version exists - a quiet, best-effort check at launch, never
+     * blocking startup and silent on any failure (offline, GitHub down, whatever). */
+    private fun checkForUpdate() {
+        applicationScope.launch {
+            val release = UpdateChecker.fetchLatestRelease() ?: return@launch
+            val currentVersion = runCatching {
+                packageManager.getPackageInfo(packageName, 0).versionName
+            }.getOrNull() ?: return@launch
+            if (!isNewerVersion(currentVersion, release.version)) return@launch
+            if (settingsStore.dismissedUpdateVersionFlow.first() == release.version) return@launch
+            _availableUpdate.value = release
+        }
+    }
+
+    fun dismissUpdate(version: String) {
+        applicationScope.launch { settingsStore.setDismissedUpdateVersion(version) }
+        _availableUpdate.value = null
     }
 
     private fun createDownloadNotificationChannel() {

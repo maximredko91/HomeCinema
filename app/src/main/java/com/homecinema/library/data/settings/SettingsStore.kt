@@ -48,6 +48,7 @@ class SettingsStore(private val context: Context) {
         val AUTO_RESCAN_ENABLED = booleanPreferencesKey("auto_rescan_enabled")
         val LAST_AUTO_SCAN_AT = longPreferencesKey("last_auto_scan_at")
         val GRID_COLUMNS = intPreferencesKey("grid_columns")
+        val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -137,6 +138,18 @@ class SettingsStore(private val context: Context) {
     suspend fun recordAutoScanNow() {
         context.dataStore.edit { prefs ->
             prefs[Keys.LAST_AUTO_SCAN_AT] = System.currentTimeMillis()
+        }
+    }
+
+    /** Version the user dismissed the "update available" banner for, so it doesn't nag them
+     * again about the same release once closed - only a newer one after that. */
+    val dismissedUpdateVersionFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DISMISSED_UPDATE_VERSION] ?: ""
+    }
+
+    suspend fun setDismissedUpdateVersion(version: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DISMISSED_UPDATE_VERSION] = version
         }
     }
 

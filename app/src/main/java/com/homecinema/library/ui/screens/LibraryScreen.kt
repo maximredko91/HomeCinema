@@ -1,5 +1,7 @@
 package com.homecinema.library.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,6 +52,7 @@ import coil.compose.AsyncImage
 import com.homecinema.library.R
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.scanner.ScanProgress
+import com.homecinema.library.data.update.ReleaseInfo
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.viewmodel.CollectionSummary
 import com.homecinema.library.ui.viewmodel.LibraryFilter
@@ -86,6 +90,7 @@ fun LibraryScreen(
     val availableYearBounds by viewModel.availableYearBounds.collectAsState()
     val gridColumns by viewModel.gridColumns.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
+    val availableUpdate by viewModel.availableUpdate.collectAsState()
 
     var searchActive by remember { mutableStateOf(false) }
     var filtersSheetOpen by remember { mutableStateOf(false) }
@@ -227,7 +232,9 @@ fun LibraryScreen(
                     onPlayItem = onPlayItem,
                     onDismissContinueWatching = viewModel::dismissContinueWatching,
                     onRescan = viewModel::rescan,
-                    onDismissProgress = viewModel::dismissProgress
+                    onDismissProgress = viewModel::dismissProgress,
+                    availableUpdate = availableUpdate,
+                    onDismissUpdate = viewModel::dismissUpdate
                 )
             }
         }
@@ -267,7 +274,9 @@ private fun LibraryGrid(
     onPlayItem: (String) -> Unit,
     onDismissContinueWatching: (String) -> Unit,
     onRescan: () -> Unit,
-    onDismissProgress: () -> Unit
+    onDismissProgress: () -> Unit,
+    availableUpdate: ReleaseInfo?,
+    onDismissUpdate: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
@@ -284,6 +293,12 @@ private fun LibraryGrid(
     val showAlphabetBar = alphabetIndexEnabled && letterIndex.size > 1
 
     Column(Modifier.fillMaxSize()) {
+        availableUpdate?.let { release ->
+            UpdateAvailableBanner(
+                release = release,
+                onDismiss = { onDismissUpdate(release.version) }
+            )
+        }
         if (continueWatching.isNotEmpty()) {
             ContinueWatchingRow(items = continueWatching, onClick = onPlayItem, onDismiss = onDismissContinueWatching)
         }
@@ -783,6 +798,32 @@ private fun EmptyState(
         )
         Spacer(Modifier.height(20.dp))
         Button(onClick = onAction) { Text(actionLabel) }
+    }
+}
+
+@Composable
+private fun UpdateAvailableBanner(
+    release: ReleaseInfo,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(16.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        tonalElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Доступна версия ${release.version}", modifier = Modifier.weight(1f))
+            TextButton(onClick = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)))
+            }) { Text("Скачать") }
+            TextButton(onClick = onDismiss) { Text("Закрыть") }
+        }
     }
 }
 

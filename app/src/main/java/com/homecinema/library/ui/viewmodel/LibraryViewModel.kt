@@ -6,6 +6,7 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.scanner.ScanProgress
+import com.homecinema.library.data.update.ReleaseInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -126,6 +127,10 @@ class LibraryViewModel : ViewModel() {
     /** In-progress movies/cartoons/episodes, most recently played first. */
     val continueWatching: StateFlow<List<MediaItemEntity>> = app.repository.observeContinueWatching()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val availableUpdate: StateFlow<ReleaseInfo?> = app.availableUpdate
+
+    fun dismissUpdate(version: String) = app.dismissUpdate(version)
 
     fun setFilter(filter: LibraryFilter) {
         _filter.value = filter
