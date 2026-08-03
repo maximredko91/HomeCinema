@@ -64,12 +64,17 @@ class LibraryScanner(
 
             // A single unreachable source (e.g. a NAS that's asleep) shouldn't block scanning
             // the rest - that resilience is the whole point of supporting several sources.
+            // Errors are collected rather than reported immediately: onProgress(Error(...))
+            // here used to get silently overwritten by the Done(...) at the end of this
+            // function, so a failing source looked exactly like "0 titles found" with no
+            // indication anything had gone wrong.
             val allResults = mutableListOf<MediaItemEntity>()
+            val errors = mutableListOf<String>()
             for (source in sources) {
                 try {
                     allResults += scanSource(source, onProgress)
                 } catch (e: Exception) {
-                    onProgress(ScanProgress.Error("«${source.name}»: ${e.message ?: "не удалось просканировать"}"))
+                    errors += "«${source.name}»: ${e.message ?: e::class.simpleName ?: "не удалось просканировать"}"
                 }
             }
 
@@ -92,7 +97,11 @@ class LibraryScanner(
             dao.deleteMissingTopLevel(merged.filter { it.mediaType != MediaType.EPISODE }.map { it.folderPath })
             dao.deleteMissingEpisodes(merged.filter { it.mediaType == MediaType.EPISODE }.map { it.id })
 
-            onProgress(ScanProgress.Done(merged.size))
+            if (errors.isNotEmpty()) {
+                onProgress(ScanProgress.Error("Найдено ${merged.size} тайтлов. Ошибки: ${errors.joinToString("; ")}"))
+            } else {
+                onProgress(ScanProgress.Done(merged.size))
+            }
         } catch (e: Exception) {
             onProgress(ScanProgress.Error(e.message ?: "Unknown error while scanning"))
         }
