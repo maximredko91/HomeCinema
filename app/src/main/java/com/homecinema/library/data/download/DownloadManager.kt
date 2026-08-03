@@ -4,8 +4,8 @@ import android.content.Context
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.LibraryDao
 import com.homecinema.library.data.db.MediaItemEntity
-import com.homecinema.library.data.db.SmbSourceDao
 import com.homecinema.library.data.smb.SmbManager
+import com.homecinema.library.data.smb.SmbSourceResolver
 import com.homecinema.library.data.smb.toSmbConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap
 class DownloadManager(
     private val smbManager: SmbManager,
     private val dao: LibraryDao,
-    private val sourceDao: SmbSourceDao,
+    private val sourceResolver: SmbSourceResolver,
     private val context: Context,
     private val scope: CoroutineScope
 ) {
@@ -53,7 +53,7 @@ class DownloadManager(
                 setProgress(item.id, 0)
                 dao.updateDownloadProgress(item.id, DownloadState.DOWNLOADING, 0)
 
-                val source = sourceDao.getById(item.sourceId) ?: error("SMB source not found for ${item.title}")
+                val source = sourceResolver.resolve(item.sourceId) ?: error("SMB source not found for ${item.title}")
                 val smbFile = smbManager.openFile(source.id, source.toSmbConfig(), item.videoFilePath)
                 val totalBytes = runCatching { smbFile.length() }.getOrDefault(-1L)
                 val extension = item.videoFilePath.substringAfterLast('.', "mp4")

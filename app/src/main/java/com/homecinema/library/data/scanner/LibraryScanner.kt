@@ -11,6 +11,7 @@ import com.homecinema.library.data.nfo.NfoData
 import com.homecinema.library.data.nfo.NfoParser
 import com.homecinema.library.data.nfo.looksAnimated
 import com.homecinema.library.data.smb.SmbManager
+import com.homecinema.library.data.smb.SmbSourceResolver
 import com.homecinema.library.data.smb.toSmbConfig
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,7 @@ class LibraryScanner(
     private val smbManager: SmbManager,
     private val dao: LibraryDao,
     private val sourceDao: SmbSourceDao,
+    private val sourceResolver: SmbSourceResolver,
     private val context: Context
 ) {
 
@@ -98,7 +100,7 @@ class LibraryScanner(
 
     /** Scans a single configured source and returns its raw results (not yet merged/saved). */
     private suspend fun scanSource(source: SmbSourceEntity, onProgress: (ScanProgress) -> Unit): List<MediaItemEntity> {
-            val config = source.toSmbConfig()
+            val config = sourceResolver.withRealPassword(source).toSmbConfig()
             val allFiles = smbManager.listAllFilesRecursive(source.id, config)
             onProgress(ScanProgress.Scanning(allFiles.size))
 

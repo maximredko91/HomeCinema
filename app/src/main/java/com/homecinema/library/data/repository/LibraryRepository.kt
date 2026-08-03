@@ -7,8 +7,10 @@ import com.homecinema.library.data.db.SmbSourceDao
 import com.homecinema.library.data.db.SmbSourceEntity
 import com.homecinema.library.data.scanner.LibraryScanner
 import com.homecinema.library.data.scanner.ScanProgress
+import com.homecinema.library.data.security.CredentialStore
 import com.homecinema.library.data.settings.SettingsStore
 import com.homecinema.library.data.smb.SmbManager
+import com.homecinema.library.data.smb.SmbSourceResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -20,9 +22,11 @@ class LibraryRepository(
     private val dao: LibraryDao,
     private val sourceDao: SmbSourceDao,
     private val smbManager: SmbManager,
+    private val credentialStore: CredentialStore,
     private val context: Context
 ) {
-    private val scanner = LibraryScanner(smbManager, dao, sourceDao, context)
+    private val sourceResolver = SmbSourceResolver(sourceDao, credentialStore)
+    private val scanner = LibraryScanner(smbManager, dao, sourceDao, sourceResolver, context)
 
     fun observeLibrary(): Flow<List<MediaItemEntity>> = dao.observeLibrary()
 
@@ -48,17 +52,24 @@ class LibraryRepository(
 
     // --- SMB sources (a library can span more than one share) ---
 
+    /** For list/display UI only - password is always blank here, see [getSource]. */
     fun observeSources(): Flow<List<SmbSourceEntity>> = sourceDao.observeAll()
 
-    suspend fun getSource(id: String): SmbSourceEntity? = sourceDao.getById(id)
+    /** Resolves the source with its real password attached (from CredentialStore), for
+     * editing or for anything that actually needs to connect. */
+    suspend fun getSource(id: String): SmbSourceEntity? = sourceResolver.resolve(id)
 
+    /** The password never gets written into Room - it goes to the encrypted CredentialStore
+     * instead, so a copy of the (unencrypted) app database never carries it. */
     suspend fun saveSource(source: SmbSourceEntity) {
-        sourceDao.upsert(source)
+        credentialStore.setPassword(source.id, source.password)
+        sourceDao.upsert(source.copy(password = ""))
         smbManager.invalidateCache(source.id)
     }
 
     suspend fun deleteSource(id: String) {
         sourceDao.delete(id)
+        credentialStore.deletePassword(id)
         smbManager.invalidateCache(id)
     }
 
@@ -71,16 +82,18 @@ class LibraryRepository(
         if (sourceDao.observeAll().first().isNotEmpty()) return
         val legacy = settingsStore.currentConfig()
         if (!legacy.isConfigured) return
+        val id = UUID.randomUUID().toString()
+        credentialStore.setPassword(id, legacy.password)
         sourceDao.upsert(
             SmbSourceEntity(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 name = "Основной",
                 host = legacy.host,
                 share = legacy.share,
                 rootPath = legacy.rootPath,
                 domain = legacy.domain,
                 username = legacy.username,
-                password = legacy.password,
+                password = "",
                 guest = legacy.guest
             )
         )

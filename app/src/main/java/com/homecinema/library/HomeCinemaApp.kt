@@ -4,8 +4,10 @@ import android.app.Application
 import com.homecinema.library.data.db.AppDatabase
 import com.homecinema.library.data.download.DownloadManager
 import com.homecinema.library.data.repository.LibraryRepository
+import com.homecinema.library.data.security.CredentialStore
 import com.homecinema.library.data.settings.SettingsStore
 import com.homecinema.library.data.smb.SmbManager
+import com.homecinema.library.data.smb.SmbSourceResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,8 +40,10 @@ class HomeCinemaApp : Application() {
         settingsStore = SettingsStore(this)
         smbManager = SmbManager()
         database = AppDatabase.build(this)
-        repository = LibraryRepository(database.libraryDao(), database.smbSourceDao(), smbManager, this)
-        downloadManager = DownloadManager(smbManager, database.libraryDao(), database.smbSourceDao(), this, applicationScope)
+        val credentialStore = CredentialStore(this)
+        val sourceResolver = SmbSourceResolver(database.smbSourceDao(), credentialStore)
+        repository = LibraryRepository(database.libraryDao(), database.smbSourceDao(), smbManager, credentialStore, this)
+        downloadManager = DownloadManager(smbManager, database.libraryDao(), sourceResolver, this, applicationScope)
 
         applicationScope.launch { repository.migrateLegacySourceIfNeeded(settingsStore) }
     }

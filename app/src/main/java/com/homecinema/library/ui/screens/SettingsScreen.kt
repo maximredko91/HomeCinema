@@ -263,7 +263,15 @@ private fun SourcesSection() {
             sources.forEach { source ->
                 SourceRow(
                     source = source,
-                    onEdit = { editingSource = source; dialogOpen = true },
+                    // The observed list never carries the real password (it's encrypted,
+                    // stored outside Room) - resolve it before opening the edit form so
+                    // the field isn't blank as if it had been lost.
+                    onEdit = {
+                        scope.launch {
+                            editingSource = app.repository.getSource(source.id)
+                            dialogOpen = true
+                        }
+                    },
                     onDelete = { scope.launch { app.repository.deleteSource(source.id) } }
                 )
             }

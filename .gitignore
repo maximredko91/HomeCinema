@@ -22,3 +22,11 @@ out/
 
 # Log files
 *.log
+
+# Release signing - NEVER commit. Losing this keystore means every future
+# release build gets a different signature, breaking in-place updates for
+# anyone who already installed a build signed with it. Back it up somewhere
+# safe (password manager / encrypted drive) outside of git.
+/keystore.properties
+/app/release.keystore
+*.jks
