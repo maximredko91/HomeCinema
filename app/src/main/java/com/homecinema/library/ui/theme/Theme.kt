@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.homecinema.library.data.settings.ThemeMode
@@ -12,7 +14,7 @@ import com.homecinema.library.data.settings.ThemeMode
 /** Whether [mode] resolves to a dark base palette, given the current system setting. */
 fun resolveDarkTheme(mode: ThemeMode, systemInDarkTheme: Boolean): Boolean = when (mode) {
     ThemeMode.LIGHT -> false
-    ThemeMode.DARK, ThemeMode.OLED -> true
+    ThemeMode.DARK, ThemeMode.OLED, ThemeMode.GLASS -> true
     ThemeMode.SYSTEM -> systemInDarkTheme
 }
 
@@ -22,8 +24,13 @@ fun resolveDarkTheme(mode: ThemeMode, systemInDarkTheme: Boolean): Boolean = whe
 fun backgroundColorFor(mode: ThemeMode, systemInDarkTheme: Boolean): Color = when {
     !resolveDarkTheme(mode, systemInDarkTheme) -> LightBackground
     mode == ThemeMode.OLED -> OledBackground
+    mode == ThemeMode.GLASS -> GlassBackground
     else -> CinemaBackground
 }
+
+/** Whether the "Стекло" style is active - read by chrome surfaces (bars, sheets, cards)
+ * that render a translucent/glass look instead of a flat Material surface when true. */
+val LocalIsGlassTheme = staticCompositionLocalOf { false }
 
 private fun onColorFor(background: Color): Color =
     if (background.luminance() > 0.5f) Color.Black else Color.White
@@ -38,11 +45,15 @@ fun HomeCinemaTheme(
     val onAccent = onColorFor(accent.color)
 
     val colorScheme = if (isDark) {
-        val oled = themeMode == ThemeMode.OLED
+        val (bg, surface, surfaceVariant) = when (themeMode) {
+            ThemeMode.OLED -> Triple(OledBackground, OledSurface, OledSurfaceVariant)
+            ThemeMode.GLASS -> Triple(GlassBackground, GlassSurface, GlassSurfaceVariant)
+            else -> Triple(CinemaBackground, CinemaSurface, CinemaSurfaceVariant)
+        }
         darkColorScheme(
-            background = if (oled) OledBackground else CinemaBackground,
-            surface = if (oled) OledSurface else CinemaSurface,
-            surfaceVariant = if (oled) OledSurfaceVariant else CinemaSurfaceVariant,
+            background = bg,
+            surface = surface,
+            surfaceVariant = surfaceVariant,
             primary = accent.color,
             secondary = accent.color,
             onBackground = CinemaTextPrimary,
@@ -63,9 +74,11 @@ fun HomeCinemaTheme(
         )
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = CinemaTypography,
-        content = content
-    )
+    CompositionLocalProvider(LocalIsGlassTheme provides (themeMode == ThemeMode.GLASS)) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = CinemaTypography,
+            content = content
+        )
+    }
 }

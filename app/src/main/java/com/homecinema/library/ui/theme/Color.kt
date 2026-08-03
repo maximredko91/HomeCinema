@@ -20,6 +20,14 @@ val OledSurfaceVariant = Color(0xFF161616)
 // paint the system status/navigation bars with this exact same color.
 val LightBackground = Color(0xFFFFFBFE)
 
+// "Стекло" theme: a deep, slightly cool base so translucent chrome panels (top bars,
+// sheets, cards) read clearly against it - real backdrop blur isn't available without a
+// third-party library, so the glass look comes from translucency + a specular highlight
+// gradient + a thin light-catching border instead (see GlassStyle.kt).
+val GlassBackground = Color(0xFF121022)
+val GlassSurface = Color(0xFF1C1930)
+val GlassSurfaceVariant = Color(0xFF272240)
+
 enum class AccentColor(val label: String, val color: Color) {
     GOLD("Золотой", Color(0xFFE6B450)),
     BLUE("Синий", Color(0xFF4C8DFF)),

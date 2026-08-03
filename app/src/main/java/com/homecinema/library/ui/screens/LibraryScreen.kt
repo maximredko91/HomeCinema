@@ -50,6 +50,9 @@ import com.homecinema.library.ui.viewmodel.LibraryFilter
 import com.homecinema.library.ui.viewmodel.LibraryTab
 import com.homecinema.library.ui.viewmodel.LibraryViewModel
 import com.homecinema.library.ui.viewmodel.SortOrder
+import com.homecinema.library.ui.theme.LocalIsGlassTheme
+import com.homecinema.library.ui.theme.glassContainerColor
+import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -168,7 +171,8 @@ fun LibraryScreen(
                             Icon(Icons.Default.Settings, contentDescription = "Настройки")
                         }
                     }
-                }
+                },
+                colors = homeCinemaTopAppBarColors()
             )
         }
     ) { padding ->
@@ -494,16 +498,21 @@ private fun ScrollJumpButtons(
     val canScrollUp = gridState.canScrollBackward
     val canScrollDown = gridState.canScrollForward
     if (!canScrollUp && !canScrollDown) return
+    val isGlass = LocalIsGlassTheme.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (canScrollUp) {
-            SmallFloatingActionButton(onClick = { scope.launch { gridState.animateScrollToItem(0) } }) {
+            SmallFloatingActionButton(
+                onClick = { scope.launch { gridState.animateScrollToItem(0) } },
+                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor
+            ) {
                 Icon(Icons.Default.KeyboardArrowUp, contentDescription = "В начало списка")
             }
         }
         if (canScrollDown) {
             SmallFloatingActionButton(
-                onClick = { scope.launch { gridState.animateScrollToItem((itemCount - 1).coerceAtLeast(0)) } }
+                onClick = { scope.launch { gridState.animateScrollToItem((itemCount - 1).coerceAtLeast(0)) } },
+                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor
             ) {
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "В конец списка")
             }
@@ -618,7 +627,7 @@ private fun FiltersSheet(
         )
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = glassContainerColor) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

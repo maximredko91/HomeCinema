@@ -9,6 +9,7 @@ import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -46,6 +47,8 @@ import androidx.media3.ui.PlayerView
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.smb.SmbDataSource
 import com.homecinema.library.data.smb.toSmbConfig
+import com.homecinema.library.ui.theme.LocalIsGlassTheme
+import com.homecinema.library.ui.theme.glassBorderBrush
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -335,8 +338,9 @@ fun PlayerScreen(itemId: String) {
 
 @Composable
 private fun GestureIndicator(icon: ImageVector, level: Float, modifier: Modifier = Modifier) {
+    val isGlass = LocalIsGlassTheme.current
     Surface(
-        modifier = modifier,
+        modifier = if (isGlass) modifier.border(1.dp, glassBorderBrush, RoundedCornerShape(16.dp)) else modifier,
         shape = RoundedCornerShape(16.dp),
         color = Color.Black.copy(alpha = 0.6f)
     ) {

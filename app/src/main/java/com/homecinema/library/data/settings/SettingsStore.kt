@@ -29,7 +29,7 @@ data class SmbConfig(
 
 enum class PlaybackMode { INTERNAL, EXTERNAL, ASK }
 
-enum class ThemeMode { SYSTEM, LIGHT, DARK, OLED }
+enum class ThemeMode { SYSTEM, LIGHT, DARK, OLED, GLASS }
 
 class SettingsStore(private val context: Context) {
 

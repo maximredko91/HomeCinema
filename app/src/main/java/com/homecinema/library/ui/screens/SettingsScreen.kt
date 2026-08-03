@@ -50,6 +50,11 @@ import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.settings.SmbConfig
 import com.homecinema.library.data.settings.ThemeMode
 import com.homecinema.library.ui.theme.AccentColor
+import com.homecinema.library.ui.theme.LocalIsGlassTheme
+import com.homecinema.library.ui.theme.glassBorderBrush
+import com.homecinema.library.ui.theme.glassContainerColor
+import com.homecinema.library.ui.theme.glassHighlightBrush
+import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -76,7 +81,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
                     }
-                }
+                },
+                colors = homeCinemaTopAppBarColors()
             )
         }
     ) { padding ->
@@ -151,6 +157,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                         label = "OLED (глубокий чёрный)",
                         selected = themeMode == ThemeMode.OLED,
                         onSelect = { scope.launch { app.settingsStore.saveThemeMode(ThemeMode.OLED) } }
+                    )
+                    RadioOption(
+                        label = "Стекло",
+                        selected = themeMode == ThemeMode.GLASS,
+                        onSelect = { scope.launch { app.settingsStore.saveThemeMode(ThemeMode.GLASS) } }
                     )
                 }
 
@@ -458,11 +469,20 @@ private fun SettingsSection(
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     val showContent = !expandable || expanded
+    val isGlass = LocalIsGlassTheme.current
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .background(glassHighlightBrush, MaterialTheme.shapes.medium)
+                        .border(1.dp, glassBorderBrush, MaterialTheme.shapes.medium)
+                } else Modifier
+            ),
+        colors = CardDefaults.cardColors(containerColor = glassContainerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isGlass) 0.dp else 1.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(

@@ -28,6 +28,7 @@ import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.ui.components.DownloadControlRow
 import com.homecinema.library.ui.components.ZoomableImageDialog
+import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -56,7 +57,8 @@ fun DetailScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
                     }
-                }
+                },
+                colors = homeCinemaTopAppBarColors()
             )
         }
     ) { padding ->
