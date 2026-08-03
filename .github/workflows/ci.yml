@@ -41,24 +41,9 @@ jobs:
           name: unit-test-results
           path: app/build/reports/tests/testDebugUnitTest
 
-  instrumented-tests:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Instrumented tests (Compose UI)
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: arm64-v8a
-          script: ./gradlew connectedDebugAndroidTest --console=plain
+# There used to be an `instrumented-tests` job here (Compose UI tests on a real/emulated
+# device via reactivecircus/android-emulator-runner on macos-latest). Removed - GitHub-hosted
+# macOS runners don't support nested virtualization, so Apple's Hypervisor Framework never
+# initializes ("HVF error: HV_UNSUPPORTED") and the emulator can never boot, regardless of
+# system image architecture (tried both x86_64 and arm64-v8a). This project's actual
+# verification loop is unit tests here plus real-device testing via adb, not a CI emulator.
