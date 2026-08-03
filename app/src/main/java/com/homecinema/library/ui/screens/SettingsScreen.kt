@@ -1,5 +1,10 @@
 package com.homecinema.library.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +22,8 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
@@ -445,21 +452,45 @@ private fun SourceEditDialog(
 private fun SettingsSection(
     title: String,
     icon: ImageVector,
+    expandable: Boolean = false,
+    initiallyExpanded: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    val showContent = !expandable || expanded
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (expandable) Modifier.clickable { expanded = !expanded } else Modifier),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (expandable) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Свернуть" else "Развернуть"
+                    )
+                }
             }
-            Spacer(Modifier.height(12.dp))
-            content()
+            AnimatedVisibility(
+                visible = showContent,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    content()
+                }
+            }
         }
     }
 }
@@ -512,7 +543,7 @@ private fun AboutSection() {
             .getOrNull() ?: "—"
     }
 
-    SettingsSection(title = "О приложении", icon = Icons.Default.Info) {
+    SettingsSection(title = "О приложении", icon = Icons.Default.Info, expandable = true, initiallyExpanded = false) {
         Text("Home Cinema", style = MaterialTheme.typography.titleMedium)
         Text(
             "Версия $versionName",
