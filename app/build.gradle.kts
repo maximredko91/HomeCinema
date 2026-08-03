@@ -23,8 +23,8 @@ android {
         applicationId = "com.homecinema.library"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -92,6 +92,10 @@ dependencies {
 
     // SMB client (SMB2/SMB3 support)
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+
+    // Tiny local HTTP server - bridges SMB streams to external players that can't
+    // read smb:// URIs directly (only VLC understands that scheme natively)
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     // Room (local library cache)
     implementation("androidx.room:room-runtime:2.8.4")

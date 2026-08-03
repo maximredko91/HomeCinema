@@ -169,7 +169,8 @@ class LibraryScanner(
                 country = nfoData?.country,
                 director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
                 actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
-                collectionName = nfoData?.collectionName
+                collectionName = nfoData?.collectionName,
+                tags = nfoData?.tags?.joinToString(", ").orEmpty()
             )
 
             val episodeVideoFiles = allFiles.filter { f ->
@@ -300,7 +301,8 @@ class LibraryScanner(
             country = nfoData?.country,
             director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
             actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
-            collectionName = nfoData?.collectionName
+            collectionName = nfoData?.collectionName,
+            tags = nfoData?.tags?.joinToString(", ").orEmpty()
         )
     }
 

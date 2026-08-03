@@ -80,6 +80,7 @@ class HomeCinemaApp : Application() {
         downloadManager = DownloadManager(database.libraryDao(), this, applicationScope)
 
         createDownloadNotificationChannel()
+        createStreamingNotificationChannel()
         scheduleAutoRescan()
         checkForUpdate()
 
@@ -115,6 +116,15 @@ class HomeCinemaApp : Application() {
         getSystemService<NotificationManager>()?.createNotificationChannel(channel)
     }
 
+    private fun createStreamingNotificationChannel() {
+        val channel = NotificationChannel(
+            STREAMING_NOTIFICATION_CHANNEL_ID,
+            getString(R.string.streaming_notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        )
+        getSystemService<NotificationManager>()?.createNotificationChannel(channel)
+    }
+
     /** Periodic background rescan, replacing the old app-launch-only trigger - survives
      * process death/reboots since WorkManager persists its own queue. LibraryRescanWorker
      * checks settingsStore.autoRescanEnabledFlow itself, so this can stay unconditionally
@@ -135,5 +145,6 @@ class HomeCinemaApp : Application() {
             private set
 
         const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "downloads"
+        const val STREAMING_NOTIFICATION_CHANNEL_ID = "streaming"
     }
 }

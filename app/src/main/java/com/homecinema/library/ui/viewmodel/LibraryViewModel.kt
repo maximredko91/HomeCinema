@@ -27,7 +27,8 @@ enum class LibraryFilter(val types: Set<MediaType>?) {
 enum class SortOrder(val label: String) {
     TITLE("По названию"),
     YEAR("По году"),
-    GENRE("По жанру")
+    GENRE("По жанру"),
+    RATING("По рейтингу")
 }
 
 enum class LibraryTab { ALL, COLLECTIONS }
@@ -92,6 +93,14 @@ class LibraryViewModel : ViewModel() {
             }
             .sortedBy { it.name }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Item count per category, shown next to each option in the category filter chips. */
+    val categoryCounts: StateFlow<Map<LibraryFilter, Int>> = allItems.map { items ->
+        LibraryFilter.entries.associateWith { option ->
+            val types = option.types
+            if (types == null) items.size else items.count { it.mediaType in types }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private data class BaseFilterState(
         val items: List<MediaItemEntity>,

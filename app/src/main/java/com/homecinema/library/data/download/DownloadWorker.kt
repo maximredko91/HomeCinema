@@ -11,6 +11,7 @@ import androidx.work.workDataOf
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.smb.SmbRandomAccessInputStream
 import com.homecinema.library.data.smb.toSmbConfig
 import jcifs.smb.SmbException
 import jcifs.smb.SmbFile
@@ -114,7 +115,7 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
 
     private fun openResumableInput(smbFile: SmbFile, offset: Long): InputStream =
         if (offset > 0) {
-            SmbRandomAccessFileInputStream(SmbRandomAccessFile(smbFile, "r").apply { seek(offset) })
+            SmbRandomAccessInputStream(SmbRandomAccessFile(smbFile, "r").apply { seek(offset) })
         } else {
             smbFile.inputStream
         }
@@ -141,12 +142,6 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
             .build()
 
     private fun notificationId(itemId: String) = itemId.hashCode()
-}
-
-private class SmbRandomAccessFileInputStream(private val raf: SmbRandomAccessFile) : InputStream() {
-    override fun read(): Int = raf.read()
-    override fun read(b: ByteArray, off: Int, len: Int): Int = raf.read(b, off, len)
-    override fun close() = raf.close()
 }
 
 internal fun destFileFor(app: HomeCinemaApp, item: MediaItemEntity): File {

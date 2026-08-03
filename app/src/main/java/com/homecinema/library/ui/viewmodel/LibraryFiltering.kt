@@ -20,11 +20,21 @@ fun applyLibraryFilters(
     var result = if (types == null) items else items.filter { it.mediaType in types }
 
     if (query.isNotBlank()) {
-        result = result.filter { item ->
-            item.title.contains(query, ignoreCase = true) ||
-                item.plot.contains(query, ignoreCase = true) ||
-                item.actors?.contains(query, ignoreCase = true) == true ||
-                item.director?.contains(query, ignoreCase = true) == true
+        if (query.startsWith("#")) {
+            // "#пираты" - explicit tag search, matches only against .nfo <tag> keywords
+            // (a separate, free-form field from <genre>) rather than the usual text fields.
+            val tagQuery = query.removePrefix("#").trim()
+            result = result.filter { item ->
+                item.tags.split(",").map { it.trim() }.any { it.contains(tagQuery, ignoreCase = true) }
+            }
+        } else {
+            result = result.filter { item ->
+                item.title.contains(query, ignoreCase = true) ||
+                    item.plot.contains(query, ignoreCase = true) ||
+                    item.actors?.contains(query, ignoreCase = true) == true ||
+                    item.director?.contains(query, ignoreCase = true) == true ||
+                    item.tags.contains(query, ignoreCase = true)
+            }
         }
     }
 
@@ -48,5 +58,6 @@ fun applyLibraryFilters(
         SortOrder.GENRE -> result.sortedWith(
             compareBy<MediaItemEntity> { it.genres.substringBefore(",").trim().ifBlank { "￿" } }.thenBy { it.title }
         )
+        SortOrder.RATING -> result.sortedWith(compareByDescending<MediaItemEntity> { it.rating ?: 0.0 }.thenBy { it.title })
     }
 }

@@ -6,6 +6,8 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,7 +28,10 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.settings.PlaybackMode
+import com.homecinema.library.data.streaming.StreamingService
+import com.homecinema.library.data.streaming.mimeTypeForExtension
 import com.homecinema.library.ui.components.DownloadControlRow
+import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.components.ZoomableImageDialog
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
@@ -38,13 +43,15 @@ fun DetailScreen(
     itemId: String,
     onBack: () -> Unit,
     onPlayInternally: (String) -> Unit,
-    onOpenShow: (String) -> Unit
+    onOpenShow: (String) -> Unit,
+    onOpenDetail: (String) -> Unit
 ) {
     val app = HomeCinemaApp.instance
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     val item by app.repository.observeById(itemId).collectAsState(initial = null)
+    val libraryItems by app.repository.observeLibrary().collectAsState(initial = emptyList())
     val liveProgressMap by app.downloadManager.liveProgress.collectAsState()
     val playbackMode by app.settingsStore.playbackModeFlow.collectAsState(initial = PlaybackMode.ASK)
     var zoomedImage by remember { mutableStateOf<String?>(null) }
@@ -141,7 +148,7 @@ fun DetailScreen(
                             Text("Смотреть")
                         }
                     } else {
-                        Button(onClick = { playExternally(context, current) }) {
+                        Button(onClick = { scope.launch { playExternally(context, current) } }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text("Смотреть во внешнем плеере")
@@ -149,7 +156,7 @@ fun DetailScreen(
                     }
                     if (playbackMode == PlaybackMode.ASK) {
                         Spacer(Modifier.width(12.dp))
-                        OutlinedButton(onClick = { playExternally(context, current) }) {
+                        OutlinedButton(onClick = { scope.launch { playExternally(context, current) } }) {
                             Icon(Icons.Default.OpenInNew, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text("Во внешнем плеере")
@@ -187,6 +194,27 @@ fun DetailScreen(
                 Spacer(Modifier.height(6.dp))
                 Text(current.actors, style = MaterialTheme.typography.bodyMedium)
             }
+
+            val collectionName = current.collectionName
+            if (!collectionName.isNullOrBlank()) {
+                val collectionItems = remember(libraryItems, collectionName, current.id) {
+                    libraryItems.filter { it.collectionName == collectionName && it.id != current.id }
+                }
+                if (collectionItems.isNotEmpty()) {
+                    Spacer(Modifier.height(20.dp))
+                    Text("Другие фильмы из коллекции «$collectionName»", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(10.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(collectionItems, key = { it.id }) { collectionItem ->
+                            MediaPosterCard(
+                                item = collectionItem,
+                                onClick = { onOpenDetail(collectionItem.id) },
+                                modifier = Modifier.width(110.dp)
+                            )
+                        }
+                    }
+                }
+            }
             }
         }
     }
@@ -197,11 +225,12 @@ fun DetailScreen(
 }
 
 /**
- * Hands the video off to any installed external player. Prefers the locally
- * downloaded copy (via FileProvider) when available, falling back to the
- * smb:// stream URL for players that support SMB directly (e.g. VLC).
+ * Hands the video off to any installed external player. Prefers the locally downloaded copy
+ * (via FileProvider) when available. Otherwise, since only VLC understands a raw smb:// URI
+ * passed via ACTION_VIEW, bridges the SMB stream through a local loopback HTTP server
+ * ([StreamingService]) so any external player can read it.
  */
-fun playExternally(context: Context, item: MediaItemEntity) {
+suspend fun playExternally(context: Context, item: MediaItemEntity) {
     val intent = Intent(Intent.ACTION_VIEW)
     val localPath = item.localFilePath
     if (localPath != null && File(localPath).exists()) {
@@ -209,7 +238,9 @@ fun playExternally(context: Context, item: MediaItemEntity) {
         intent.setDataAndType(uri, "video/*")
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     } else {
-        intent.setDataAndType(Uri.parse(item.videoFilePath), "video/*")
+        val streamUrl = StreamingService.streamUrl(context, item.id)
+        val mimeType = mimeTypeForExtension(item.videoFilePath.substringAfterLast('.', ""))
+        intent.setDataAndType(Uri.parse(streamUrl), mimeType)
     }
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(intent) }

@@ -86,7 +86,7 @@ fun ShowDetailScreen(
                         episode = episode,
                         liveProgress = liveProgressMap[episode.id],
                         onPlay = { onPlayEpisode(episode.id) },
-                        onPlayExternally = { playExternally(context, episode) },
+                        onPlayExternally = { scope.launch { playExternally(context, episode) } },
                         onDownload = { app.downloadManager.start(episode) },
                         onCancelDownload = { app.downloadManager.cancel(episode.id) },
                         onDeleteDownload = { scope.launch { app.downloadManager.deleteDownload(episode) } }

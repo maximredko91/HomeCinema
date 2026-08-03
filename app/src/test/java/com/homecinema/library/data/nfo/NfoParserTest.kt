@@ -173,6 +173,29 @@ class NfoParserTest {
     }
 
     @Test
+    fun `parses tag elements as free-form theme keywords, distinct from genre`() {
+        val data = parse(
+            """
+            <movie>
+                <title>Пираты Карибского моря</title>
+                <genre>Приключения</genre>
+                <tag>пираты</tag>
+                <tag>сокровища</tag>
+                <tag>пираты</tag>
+            </movie>
+            """.trimIndent()
+        )
+        assertEquals(listOf("Приключения"), data.genres)
+        assertEquals(listOf("пираты", "сокровища"), data.tags)
+    }
+
+    @Test
+    fun `no tag elements means an empty tags list, not null or a crash`() {
+        val data = parse("<movie><title>No tags here</title></movie>")
+        assertEquals(emptyList<String>(), data.tags)
+    }
+
+    @Test
     fun `looksAnimated matches Russian and English animation keywords`() {
         assertTrue(listOf("Мультфильм").looksAnimated())
         assertTrue(listOf("Action", "Animation").looksAnimated())

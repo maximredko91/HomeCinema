@@ -14,14 +14,16 @@ private fun item(
     plot: String = "",
     actors: String? = null,
     director: String? = null,
-    collectionName: String? = null
+    collectionName: String? = null,
+    rating: Double? = null,
+    tags: String = ""
 ): MediaItemEntity = MediaItemEntity(
     id = id,
     title = title,
     year = year,
     genres = genres,
     plot = plot,
-    rating = null,
+    rating = rating,
     mediaType = mediaType,
     folderPath = "smb://host/share/$id/",
     videoFilePath = "smb://host/share/$id/video.mkv",
@@ -29,25 +31,36 @@ private fun item(
     lastScanned = 0L,
     actors = actors,
     director = director,
-    collectionName = collectionName
+    collectionName = collectionName,
+    tags = tags
 )
 
 class LibraryFilteringTest {
 
     private val bond2006 = item(
         "1", "007: Казино Рояль", year = 2006, genres = "Боевик, Триллер",
-        actors = "Daniel Craig, Eva Green", director = "Martin Campbell", collectionName = "007"
+        actors = "Daniel Craig, Eva Green", director = "Martin Campbell", collectionName = "007",
+        rating = 8.0, tags = "шпионы, покер"
     )
     private val bond2008 = item(
         "2", "007: Квант милосердия", year = 2008, genres = "Боевик",
-        director = "Marc Forster", collectionName = "007"
+        director = "Marc Forster", collectionName = "007", rating = 6.6
     )
     private val interstellar = item(
         "3", "Интерстеллар", year = 2014, genres = "Фантастика, Драма",
-        plot = "Освоение космоса ради выживания человечества.", director = "Christopher Nolan"
+        plot = "Освоение космоса ради выживания человечества.", director = "Christopher Nolan",
+        rating = 8.6
     )
     private val sesame = item("4", "Улица Сезам", mediaType = MediaType.TV_SHOW, genres = "Мультсериал")
     private val allItems = listOf(bond2006, bond2008, interstellar, sesame)
+
+    // Separate from allItems (used by unrelated tests with exact expected orderings/counts
+    // already spelled out below) so adding it doesn't force reworking those.
+    private val pirates = item(
+        "5", "Пираты Карибского моря", year = 2003, genres = "Приключения",
+        tags = "пираты, сокровища"
+    )
+    private val itemsWithPirates = allItems + pirates
 
     @Test
     fun `filters by media type`() {
@@ -138,5 +151,38 @@ class LibraryFilteringTest {
         val result = applyLibraryFilters(allItems, LibraryFilter.ALL, "", SortOrder.GENRE)
         // Боевик < Мультсериал < Фантастика alphabetically (Cyrillic order)
         assertEquals(listOf(bond2006, bond2008, sesame, interstellar), result)
+    }
+
+    @Test
+    fun `sorts by rating descending, highest first`() {
+        val result = applyLibraryFilters(allItems, LibraryFilter.ALL, "", SortOrder.RATING)
+        // sesame has no rating (treated as 0.0) and sorts last
+        assertEquals(listOf(interstellar, bond2006, bond2008, sesame), result)
+    }
+
+    @Test
+    fun `hashtag query matches only the tags field, not title or plot`() {
+        val result = applyLibraryFilters(itemsWithPirates, LibraryFilter.ALL, "#пираты", SortOrder.TITLE)
+        assertEquals(listOf(pirates), result)
+    }
+
+    @Test
+    fun `hashtag search is case-insensitive and ignores surrounding whitespace`() {
+        val result = applyLibraryFilters(itemsWithPirates, LibraryFilter.ALL, "#ПИРАТЫ", SortOrder.TITLE)
+        assertEquals(listOf(pirates), result)
+    }
+
+    @Test
+    fun `hashtag query with no matching tag returns empty, even if the word is in the title`() {
+        // "Рояль" is right there in bond2006's title, but it's not one of its tags - a
+        // #-prefixed query must not fall back to matching title/plot/actors/director.
+        val result = applyLibraryFilters(itemsWithPirates, LibraryFilter.ALL, "#рояль", SortOrder.TITLE)
+        assertEquals(emptyList<MediaItemEntity>(), result)
+    }
+
+    @Test
+    fun `ordinary search also matches tags, not just title-plot-actors-director`() {
+        val result = applyLibraryFilters(itemsWithPirates, LibraryFilter.ALL, "сокровища", SortOrder.TITLE)
+        assertEquals(listOf(pirates), result)
     }
 }

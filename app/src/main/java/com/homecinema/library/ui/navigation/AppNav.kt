@@ -53,7 +53,8 @@ fun AppNavHost() {
                 itemId = id,
                 onBack = { navController.popBackStack() },
                 onPlayInternally = { itemId -> navController.navigate("player/$itemId") },
-                onOpenShow = { showId -> navController.navigate("show/$showId") }
+                onOpenShow = { showId -> navController.navigate("show/$showId") },
+                onOpenDetail = { otherId -> navController.navigate("detail/$otherId") }
             )
         }
         composable(

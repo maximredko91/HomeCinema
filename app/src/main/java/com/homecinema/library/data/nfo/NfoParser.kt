@@ -22,7 +22,9 @@ data class NfoData(
     val directors: List<String> = emptyList(),
     val actors: List<String> = emptyList(),
     // from <set><name>...</name></set> - the Kodi "movie set" this title belongs to
-    val collectionName: String? = null
+    val collectionName: String? = null,
+    // free-form theme keywords from <tag> - distinct from <genre>, e.g. "пираты", "based on a true story"
+    val tags: List<String> = emptyList()
 )
 
 private val ANIMATION_KEYWORDS = listOf("animation", "аним", "мультф", "cartoon", "anime")
@@ -62,6 +64,7 @@ object NfoParser {
         val directors = mutableListOf<String>()
         val actors = mutableListOf<String>()
         var collectionName: String? = null
+        val tags = mutableListOf<String>()
 
         // A tag stack (rather than a single "current tag") is needed to tell apart
         // same-named leaf tags that mean different things depending on their parent,
@@ -91,6 +94,7 @@ object NfoParser {
                             "runtime" -> runtimeMinutes = value.toIntOrNull() ?: runtimeMinutes
                             "country" -> if (country == null) country = value
                             "director" -> directors.add(value)
+                            "tag" -> tags.add(value)
                             "name" -> when (parentTag) {
                                 "set" -> collectionName = value
                                 "actor" -> actors.add(value)
@@ -117,7 +121,8 @@ object NfoParser {
             country = country,
             directors = directors.distinct(),
             actors = actors.distinct(),
-            collectionName = collectionName?.takeIf { it.isNotBlank() }
+            collectionName = collectionName?.takeIf { it.isNotBlank() },
+            tags = tags.distinct()
         )
     }
 }

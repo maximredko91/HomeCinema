@@ -91,6 +91,7 @@ fun LibraryScreen(
     val gridColumns by viewModel.gridColumns.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
     val availableUpdate by viewModel.availableUpdate.collectAsState()
+    val categoryCounts by viewModel.categoryCounts.collectAsState()
 
     var searchActive by remember { mutableStateOf(false) }
     var filtersSheetOpen by remember { mutableStateOf(false) }
@@ -123,7 +124,7 @@ fun LibraryScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(searchFocusRequester),
-                            placeholder = { Text("Поиск по названию, актёрам, описанию") },
+                            placeholder = { Text("Название, актёры, описание или #тег") },
                             singleLine = true,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
@@ -143,7 +144,15 @@ fun LibraryScreen(
                         Image(
                             painter = painterResource(R.drawable.ic_app_logo),
                             contentDescription = "Home Cinema",
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(32.dp).clickable {
+                                viewModel.setLibraryTab(LibraryTab.ALL)
+                                viewModel.clearCollectionSelection()
+                                viewModel.setFilter(LibraryFilter.ALL)
+                                viewModel.setGenre(null)
+                                viewModel.setYearRange(null)
+                                viewModel.setQuery("")
+                                searchActive = false
+                            }
                         )
                     }
                 },
@@ -192,6 +201,16 @@ fun LibraryScreen(
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            if (searchActive && filtersActive) {
+                ActiveFilterDuringSearchBanner(
+                    filterLabel = describeActiveFilters(filter, selectedGenre, yearRange),
+                    onClearFilter = {
+                        viewModel.setFilter(LibraryFilter.ALL)
+                        viewModel.setGenre(null)
+                        viewModel.setYearRange(null)
+                    }
+                )
+            }
             if (configured) {
                 TabRow(selectedTabIndex = libraryTab.ordinal) {
                     Tab(
@@ -248,6 +267,7 @@ fun LibraryScreen(
             availableGenres = availableGenres,
             yearRange = yearRange,
             availableYearBounds = availableYearBounds,
+            categoryCounts = categoryCounts,
             onSetFilter = viewModel::setFilter,
             onSetSortOrder = viewModel::setSortOrder,
             onSetGenre = viewModel::setGenre,
@@ -674,6 +694,7 @@ private fun FiltersSheet(
     availableGenres: List<String>,
     yearRange: IntRange?,
     availableYearBounds: IntRange?,
+    categoryCounts: Map<LibraryFilter, Int>,
     onSetFilter: (LibraryFilter) -> Unit,
     onSetSortOrder: (SortOrder) -> Unit,
     onSetGenre: (String?) -> Unit,
@@ -703,10 +724,11 @@ private fun FiltersSheet(
             Spacer(Modifier.height(8.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FILTER_OPTIONS.forEach { option ->
+                    val count = categoryCounts[option.filter]
                     FilterChip(
                         selected = filter == option.filter,
                         onClick = { onSetFilter(option.filter) },
-                        label = { Text(option.label) }
+                        label = { Text(if (count != null) "${option.label} ($count)" else option.label) }
                     )
                 }
             }
@@ -823,6 +845,45 @@ private fun UpdateAvailableBanner(
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)))
             }) { Text("Скачать") }
             TextButton(onClick = onDismiss) { Text("Закрыть") }
+        }
+    }
+}
+
+/** Builds a short human-readable summary of whatever category/genre/year filter is active,
+ * e.g. "Мультфильмы, Комедия, 2010–2020" - shown so an active filter narrowing search results
+ * doesn't quietly read as "search is broken." */
+private fun describeActiveFilters(filter: LibraryFilter, genre: String?, yearRange: IntRange?): String {
+    val parts = mutableListOf<String>()
+    if (filter != LibraryFilter.ALL) {
+        FILTER_OPTIONS.firstOrNull { it.filter == filter }?.let { parts += it.label }
+    }
+    if (genre != null) parts += genre
+    if (yearRange != null) parts += "${yearRange.first}–${yearRange.last}"
+    return parts.joinToString(", ")
+}
+
+@Composable
+private fun ActiveFilterDuringSearchBanner(
+    filterLabel: String,
+    onClearFilter: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.errorContainer,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Поиск ограничен фильтром «$filterLabel»",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onClearFilter) { Text("Сбросить") }
         }
     }
 }
