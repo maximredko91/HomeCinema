@@ -1,12 +1,12 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
 
 android {
     namespace = "com.homecinema.library"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.homecinema.library"
@@ -27,14 +27,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
     }
     packaging {
         resources {
@@ -55,7 +49,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.1")
 
     // Compose
-    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -73,9 +67,9 @@ dependencies {
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
 
     // Room (local library cache)
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
 
     // DataStore for settings (SMB host/user/pass etc.)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
@@ -98,7 +92,7 @@ dependencies {
     testImplementation("net.sf.kxml:kxml2:2.3.0")
 
     // Instrumented UI tests (need a device/emulator - ./gradlew connectedAndroidTest)
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
