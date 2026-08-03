@@ -1,19 +1,29 @@
 package com.homecinema.library
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import com.homecinema.library.data.db.AppDatabase
 import com.homecinema.library.data.download.DownloadManager
 import com.homecinema.library.data.repository.LibraryRepository
+import com.homecinema.library.data.scanner.LibraryRescanWorker
 import com.homecinema.library.data.security.CredentialStore
 import com.homecinema.library.data.settings.SettingsStore
 import com.homecinema.library.data.smb.SmbManager
 import com.homecinema.library.data.smb.SmbSourceResolver
+import androidx.core.content.getSystemService
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.Security
+import java.util.concurrent.TimeUnit
 
 /**
  * Simple hand-rolled service locator (no Hilt/Dagger to keep the project
@@ -31,6 +41,8 @@ class HomeCinemaApp : Application() {
     lateinit var database: AppDatabase
         private set
     lateinit var repository: LibraryRepository
+        private set
+    lateinit var sourceResolver: SmbSourceResolver
         private set
     lateinit var downloadManager: DownloadManager
         private set
@@ -51,15 +63,44 @@ class HomeCinemaApp : Application() {
         smbManager = SmbManager()
         database = AppDatabase.build(this)
         val credentialStore = CredentialStore(this)
-        val sourceResolver = SmbSourceResolver(database.smbSourceDao(), credentialStore)
+        sourceResolver = SmbSourceResolver(database.smbSourceDao(), credentialStore)
         repository = LibraryRepository(database.libraryDao(), database.smbSourceDao(), smbManager, credentialStore, this)
-        downloadManager = DownloadManager(smbManager, database.libraryDao(), sourceResolver, this, applicationScope)
+        downloadManager = DownloadManager(database.libraryDao(), this, applicationScope)
+
+        createDownloadNotificationChannel()
+        scheduleAutoRescan()
 
         applicationScope.launch { repository.migrateLegacySourceIfNeeded(settingsStore) }
+    }
+
+    private fun createDownloadNotificationChannel() {
+        val channel = NotificationChannel(
+            DOWNLOAD_NOTIFICATION_CHANNEL_ID,
+            getString(R.string.download_notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        )
+        getSystemService<NotificationManager>()?.createNotificationChannel(channel)
+    }
+
+    /** Periodic background rescan, replacing the old app-launch-only trigger - survives
+     * process death/reboots since WorkManager persists its own queue. LibraryRescanWorker
+     * checks settingsStore.autoRescanEnabledFlow itself, so this can stay unconditionally
+     * scheduled here. */
+    private fun scheduleAutoRescan() {
+        val request = PeriodicWorkRequestBuilder<LibraryRescanWorker>(24, TimeUnit.HOURS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "library_auto_rescan",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     companion object {
         lateinit var instance: HomeCinemaApp
             private set
+
+        const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "downloads"
     }
 }

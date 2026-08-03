@@ -10,12 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-private val AUTO_RESCAN_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
 /** UI filter for the library grid - "null" means "show everything". */
 enum class LibraryFilter(val types: Set<MediaType>?) {
@@ -129,21 +126,6 @@ class LibraryViewModel : ViewModel() {
     /** In-progress movies/cartoons/episodes, most recently played first. */
     val continueWatching: StateFlow<List<MediaItemEntity>> = app.repository.observeContinueWatching()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    init {
-        // Best-effort "keep the library fresh" - runs once per app process (this ViewModel
-        // lives as long as the start-destination screen does), gated to at most once a day
-        // so it doesn't hammer the share every time the library screen recomposes.
-        viewModelScope.launch {
-            val autoEnabled = app.settingsStore.autoRescanEnabledFlow.first()
-            val configured = app.repository.observeSources().first().isNotEmpty()
-            val lastScan = app.settingsStore.lastAutoScanAtFlow.first()
-            if (autoEnabled && configured && System.currentTimeMillis() - lastScan > AUTO_RESCAN_INTERVAL_MS) {
-                app.settingsStore.recordAutoScanNow()
-                rescan()
-            }
-        }
-    }
 
     fun setFilter(filter: LibraryFilter) {
         _filter.value = filter
