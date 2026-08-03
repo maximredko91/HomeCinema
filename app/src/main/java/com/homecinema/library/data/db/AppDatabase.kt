@@ -21,7 +21,7 @@ class Converters {
     fun toDownloadState(value: String): DownloadState = DownloadState.valueOf(value)
 }
 
-@Database(entities = [MediaItemEntity::class, SmbSourceEntity::class], version = 4, exportSchema = false)
+@Database(entities = [MediaItemEntity::class, SmbSourceEntity::class], version = 5, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao

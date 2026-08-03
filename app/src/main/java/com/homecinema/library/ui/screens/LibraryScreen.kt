@@ -1,11 +1,6 @@
 package com.homecinema.library.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -18,22 +13,27 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.scanner.ScanProgress
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.viewmodel.CollectionSummary
@@ -58,6 +59,7 @@ fun LibraryScreen(
     onOpenDetail: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onPlayItem: (String) -> Unit,
     viewModel: LibraryViewModel = viewModel()
 ) {
     val items by viewModel.items.collectAsState()
@@ -75,64 +77,96 @@ fun LibraryScreen(
     val yearRange by viewModel.yearRange.collectAsState()
     val availableYearBounds by viewModel.availableYearBounds.collectAsState()
     val gridColumns by viewModel.gridColumns.collectAsState()
+    val continueWatching by viewModel.continueWatching.collectAsState()
 
-    var sortMenuOpen by remember { mutableStateOf(false) }
+    var searchActive by remember { mutableStateOf(false) }
+    var filtersSheetOpen by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+
     // Hoisted here (rather than inside CollectionsGrid) because LibraryScreen itself stays
     // mounted while browsing into and out of a collection - a state remembered inside
     // CollectionsGrid would reset every time that composable unmounts/remounts.
     val collectionsGridState = rememberLazyGridState()
 
-    // Without this, the system back gesture/button falls straight through to the
-    // Activity (LibraryScreen is the nav graph's start destination, so there's no
-    // back-stack entry to pop) and exits the whole app instead of leaving the collection.
+    // Closing search takes priority over leaving a collection when both are active - it's
+    // the more local, more recently opened piece of state.
     BackHandler(enabled = selectedCollection != null) { viewModel.clearCollectionSelection() }
+    BackHandler(enabled = searchActive) {
+        searchActive = false
+        viewModel.setQuery("")
+    }
+
+    val showSearchAndFilters = libraryTab == LibraryTab.ALL || selectedCollection != null
+    val filtersActive = filter != LibraryFilter.ALL || selectedGenre != null || yearRange != null
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) selectedCollection!!
-                        else "Моя коллекция"
-                    )
+                    if (searchActive) {
+                        TextField(
+                            value = query,
+                            onValueChange = viewModel::setQuery,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(searchFocusRequester),
+                            placeholder = { Text("Поиск по названию, актёрам, описанию") },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                        LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
+                    } else {
+                        Text(
+                            text = if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) selectedCollection!!
+                                else "Моя коллекция",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 },
                 navigationIcon = {
-                    if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
+                    if (searchActive) {
+                        IconButton(onClick = { searchActive = false; viewModel.setQuery("") }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Закрыть поиск")
+                        }
+                    } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
                         IconButton(onClick = { viewModel.clearCollectionSelection() }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "К списку коллекций")
                         }
                     }
                 },
                 actions = {
-                    if (libraryTab == LibraryTab.ALL || selectedCollection != null) {
-                        Box {
-                            IconButton(onClick = { sortMenuOpen = true }) {
-                                Icon(Icons.Default.Sort, contentDescription = "Сортировка")
+                    if (searchActive) {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.setQuery("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Очистить")
                             }
-                            DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
-                                SortOrder.entries.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.label) },
-                                        onClick = {
-                                            viewModel.setSortOrder(option)
-                                            sortMenuOpen = false
-                                        },
-                                        leadingIcon = {
-                                            RadioButton(selected = option == sortOrder, onClick = null)
-                                        }
-                                    )
+                        }
+                    } else {
+                        if (showSearchAndFilters) {
+                            IconButton(onClick = { searchActive = true }) {
+                                Icon(Icons.Default.Search, contentDescription = "Поиск")
+                            }
+                            BadgedBox(badge = { if (filtersActive) Badge() }) {
+                                IconButton(onClick = { filtersSheetOpen = true }) {
+                                    Icon(Icons.Default.FilterList, contentDescription = "Фильтры и сортировка")
                                 }
                             }
                         }
-                    }
-                    IconButton(onClick = onOpenDownloads) {
-                        Icon(Icons.Default.Download, contentDescription = "Загрузки")
-                    }
-                    IconButton(onClick = { viewModel.rescan() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Сканировать библиотеку")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                        IconButton(onClick = onOpenDownloads) {
+                            Icon(Icons.Default.Download, contentDescription = "Загрузки")
+                        }
+                        IconButton(onClick = { viewModel.rescan() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Сканировать библиотеку")
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                        }
                     }
                 }
             )
@@ -172,93 +206,55 @@ fun LibraryScreen(
                     sortOrder = sortOrder,
                     alphabetIndexEnabled = alphabetIndexEnabled,
                     gridColumns = gridColumns,
-                    inCollection = selectedCollection != null,
-                    selectedGenre = selectedGenre,
-                    availableGenres = availableGenres,
-                    yearRange = yearRange,
-                    availableYearBounds = availableYearBounds,
+                    continueWatching = if (selectedCollection == null) continueWatching else emptyList(),
                     onOpenDetail = onOpenDetail,
                     onOpenSettings = onOpenSettings,
-                    onSetFilter = viewModel::setFilter,
                     onSetQuery = viewModel::setQuery,
-                    onSetGenre = viewModel::setGenre,
-                    onSetYearRange = viewModel::setYearRange,
+                    onPlayItem = onPlayItem,
                     onRescan = viewModel::rescan,
                     onDismissProgress = viewModel::dismissProgress
                 )
             }
         }
     }
+
+    if (filtersSheetOpen) {
+        FiltersSheet(
+            filter = filter,
+            sortOrder = sortOrder,
+            selectedGenre = selectedGenre,
+            availableGenres = availableGenres,
+            yearRange = yearRange,
+            availableYearBounds = availableYearBounds,
+            onSetFilter = viewModel::setFilter,
+            onSetSortOrder = viewModel::setSortOrder,
+            onSetGenre = viewModel::setGenre,
+            onSetYearRange = viewModel::setYearRange,
+            onDismiss = { filtersSheetOpen = false }
+        )
+    }
 }
 
 @Composable
 private fun LibraryGrid(
     configured: Boolean,
-    items: List<com.homecinema.library.data.db.MediaItemEntity>,
+    items: List<MediaItemEntity>,
     progress: ScanProgress?,
     filter: LibraryFilter,
     query: String,
     sortOrder: SortOrder,
     alphabetIndexEnabled: Boolean,
     gridColumns: Int,
-    inCollection: Boolean,
-    selectedGenre: String?,
-    availableGenres: List<String>,
-    yearRange: IntRange?,
-    availableYearBounds: IntRange?,
+    continueWatching: List<MediaItemEntity>,
     onOpenDetail: (String) -> Unit,
     onOpenSettings: () -> Unit,
-    onSetFilter: (LibraryFilter) -> Unit,
     onSetQuery: (String) -> Unit,
-    onSetGenre: (String?) -> Unit,
-    onSetYearRange: (IntRange?) -> Unit,
+    onPlayItem: (String) -> Unit,
     onRescan: () -> Unit,
     onDismissProgress: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
-
-    // Search + filters slide away while scrolling down through a long list (more room for
-    // posters) and slide back as soon as the user scrolls back up, like most feed UIs.
-    var headerVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(gridState) {
-        var previousIndex = gridState.firstVisibleItemIndex
-        var previousOffset = gridState.firstVisibleItemScrollOffset
-        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
-            .collect { (index, offset) ->
-                val scrolledDown = index > previousIndex || (index == previousIndex && offset > previousOffset)
-                val scrolledUp = index < previousIndex || (index == previousIndex && offset < previousOffset)
-                if (scrolledDown && (index > 0 || offset > 100)) headerVisible = false
-                else if (scrolledUp) headerVisible = true
-                previousIndex = index
-                previousOffset = offset
-            }
-    }
-
-    AnimatedVisibility(
-        visible = headerVisible,
-        enter = expandVertically() + fadeIn(),
-        exit = shrinkVertically() + fadeOut()
-    ) {
-        Column {
-            if (configured) {
-                SearchField(query = query, onQueryChange = onSetQuery)
-            }
-            if (!inCollection) {
-                FilterRow(current = filter, onSelect = onSetFilter)
-                if (availableGenres.isNotEmpty() || availableYearBounds != null) {
-                    AdvancedFilterRow(
-                        selectedGenre = selectedGenre,
-                        availableGenres = availableGenres,
-                        yearRange = yearRange,
-                        availableYearBounds = availableYearBounds,
-                        onSetGenre = onSetGenre,
-                        onSetYearRange = onSetYearRange
-                    )
-                }
-            }
-        }
-    }
 
     val letterIndex = remember(items, sortOrder) {
         if (sortOrder != SortOrder.TITLE) emptyMap()
@@ -271,63 +267,139 @@ private fun LibraryGrid(
     }
     val showAlphabetBar = alphabetIndexEnabled && letterIndex.size > 1
 
-    Row(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f)) {
-            when {
-                !configured -> EmptyState(
-                    title = "Подключение не настроено",
-                    subtitle = "Укажите адрес SMB-шары на роутере в настройках, чтобы начать сканирование библиотеки.",
-                    actionLabel = "Открыть настройки",
-                    onAction = onOpenSettings
-                )
-                items.isEmpty() && progress == null && query.isNotBlank() -> EmptyState(
-                    title = "Ничего не найдено",
-                    subtitle = "По запросу «$query» ничего не нашлось. Попробуйте изменить фильтр или поисковый запрос.",
-                    actionLabel = "Очистить поиск",
-                    onAction = { onSetQuery("") }
-                )
-                items.isEmpty() && progress == null -> EmptyState(
-                    title = if (filter == LibraryFilter.ALL) "Библиотека пуста" else "Ничего не найдено в этой категории",
-                    subtitle = "Нажмите на значок обновления вверху, чтобы просканировать диск и найти фильмы, сериалы и мультфильмы по .nfo файлам.",
-                    actionLabel = "Сканировать сейчас",
-                    onAction = onRescan
-                )
-                else -> LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(items, key = { it.id }) { item ->
-                        MediaPosterCard(item = item, onClick = { onOpenDetail(item.id) })
+    Column(Modifier.fillMaxSize()) {
+        if (continueWatching.isNotEmpty()) {
+            ContinueWatchingRow(items = continueWatching, onClick = onPlayItem)
+        }
+
+        Row(Modifier.weight(1f)) {
+            Box(Modifier.weight(1f)) {
+                when {
+                    !configured -> EmptyState(
+                        title = "Подключение не настроено",
+                        subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
+                        actionLabel = "Открыть настройки",
+                        onAction = onOpenSettings
+                    )
+                    items.isEmpty() && progress == null && query.isNotBlank() -> EmptyState(
+                        title = "Ничего не найдено",
+                        subtitle = "По запросу «$query» ничего не нашлось. Попробуйте изменить фильтр или поисковый запрос.",
+                        actionLabel = "Очистить поиск",
+                        onAction = { onSetQuery("") }
+                    )
+                    items.isEmpty() && progress == null -> EmptyState(
+                        title = if (filter == LibraryFilter.ALL) "Библиотека пуста" else "Ничего не найдено в этой категории",
+                        subtitle = "Нажмите на значок обновления вверху, чтобы просканировать диск и найти фильмы, сериалы и мультфильмы по .nfo файлам.",
+                        actionLabel = "Сканировать сейчас",
+                        onAction = onRescan
+                    )
+                    else -> LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Fixed(gridColumns),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(items, key = { it.id }) { item ->
+                            MediaPosterCard(item = item, onClick = { onOpenDetail(item.id) })
+                        }
                     }
                 }
-            }
 
-            progress?.let { p ->
-                ScanProgressBanner(
-                    progress = p,
-                    onDismiss = onDismissProgress,
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                progress?.let { p ->
+                    ScanProgressBanner(
+                        progress = p,
+                        onDismiss = onDismissProgress,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
+
+                ScrollJumpButtons(
+                    gridState = gridState,
+                    itemCount = items.size,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
                 )
             }
 
-            ScrollJumpButtons(
-                gridState = gridState,
-                itemCount = items.size,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-            )
+            if (showAlphabetBar) {
+                AlphabetIndexBar(
+                    letters = letterIndex.keys.toList(),
+                    onLetterSelected = { letter ->
+                        letterIndex[letter]?.let { index -> scope.launch { gridState.scrollToItem(index) } }
+                    }
+                )
+            }
         }
+    }
+}
 
-        if (showAlphabetBar) {
-            AlphabetIndexBar(
-                letters = letterIndex.keys.toList(),
-                onLetterSelected = { letter ->
-                    letterIndex[letter]?.let { index -> scope.launch { gridState.scrollToItem(index) } }
-                }
+@Composable
+private fun ContinueWatchingRow(items: List<MediaItemEntity>, onClick: (String) -> Unit) {
+    Column(Modifier.padding(top = 12.dp, bottom = 8.dp)) {
+        Text(
+            "Продолжить просмотр",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(items, key = { it.id }) { item ->
+                ContinueWatchingCard(item = item, onClick = { onClick(item.id) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueWatchingCard(item: MediaItemEntity, onClick: () -> Unit) {
+    val progressFraction = if (item.durationMs > 0) {
+        (item.playbackPositionMs.toFloat() / item.durationMs).coerceIn(0f, 1f)
+    } else 0f
+    val thumb = item.fanartLocalPath ?: item.posterLocalPath
+
+    Column(Modifier.width(180.dp).clickable(onClick = onClick)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            if (thumb != null) {
+                AsyncImage(
+                    model = thumb,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+            }
+            LinearProgressIndicator(
+                progress = progressFraction,
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = Color.Black.copy(alpha = 0.4f)
             )
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            item.title,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -343,7 +415,7 @@ private fun CollectionsGrid(
     when {
         !configured -> EmptyState(
             title = "Подключение не настроено",
-            subtitle = "Укажите адрес SMB-шары на роутере в настройках, чтобы начать сканирование библиотеки.",
+            subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
             actionLabel = "Открыть настройки",
             onAction = onOpenSettings
         )
@@ -518,172 +590,118 @@ private val FILTER_OPTIONS = listOf(
     FilterOption(LibraryFilter.CARTOON_SERIES, "Мультсериалы")
 )
 
+/**
+ * One place for every way to narrow/order the library - category, genre, year, sort -
+ * opened on demand from a single toolbar icon instead of permanently occupying screen
+ * space above the grid (which used to fight with scroll gestures for room).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        placeholder = { Text("Поиск по названию, актёрам, описанию") },
-        singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Очистить")
-                }
-            }
-        }
-    )
-}
-
-@Composable
-private fun FilterRow(current: LibraryFilter, onSelect: (LibraryFilter) -> Unit) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(FILTER_OPTIONS) { option ->
-            FilterChip(
-                selected = current == option.filter,
-                onClick = { onSelect(option.filter) },
-                label = { Text(option.label) }
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AdvancedFilterRow(
+private fun FiltersSheet(
+    filter: LibraryFilter,
+    sortOrder: SortOrder,
     selectedGenre: String?,
     availableGenres: List<String>,
     yearRange: IntRange?,
     availableYearBounds: IntRange?,
+    onSetFilter: (LibraryFilter) -> Unit,
+    onSetSortOrder: (SortOrder) -> Unit,
     onSetGenre: (String?) -> Unit,
-    onSetYearRange: (IntRange?) -> Unit
+    onSetYearRange: (IntRange?) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (availableGenres.isNotEmpty()) {
-            GenreFilterChip(selectedGenre = selectedGenre, availableGenres = availableGenres, onSelect = onSetGenre)
-        }
-        if (availableYearBounds != null) {
-            YearFilterChip(yearRange = yearRange, bounds = availableYearBounds, onApply = onSetYearRange)
-        }
+    val sheetState = rememberModalBottomSheetState()
+    var yearSliderValue by remember(yearRange, availableYearBounds) {
+        mutableStateOf(
+            (yearRange?.first ?: availableYearBounds?.first ?: 0).toFloat()..
+                (yearRange?.last ?: availableYearBounds?.last ?: 0).toFloat()
+        )
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GenreFilterChip(
-    selectedGenre: String?,
-    availableGenres: List<String>,
-    onSelect: (String?) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        FilterChip(
-            selected = selectedGenre != null,
-            onClick = { expanded = true },
-            label = { Text(selectedGenre ?: "Жанр") },
-            trailingIcon = {
-                if (selectedGenre != null) {
-                    Icon(
-                        Icons.Default.Clear,
-                        contentDescription = "Сбросить жанр",
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clickable { onSelect(null) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Text("Фильтры и сортировка", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(16.dp))
+
+            Text("Категория", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FILTER_OPTIONS.forEach { option ->
+                    FilterChip(
+                        selected = filter == option.filter,
+                        onClick = { onSetFilter(option.filter) },
+                        label = { Text(option.label) }
                     )
                 }
             }
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Все жанры") },
-                onClick = { onSelect(null); expanded = false },
-                leadingIcon = { RadioButton(selected = selectedGenre == null, onClick = null) }
-            )
-            availableGenres.forEach { genre ->
-                DropdownMenuItem(
-                    text = { Text(genre) },
-                    onClick = { onSelect(genre); expanded = false },
-                    leadingIcon = { RadioButton(selected = genre == selectedGenre, onClick = null) }
-                )
-            }
-        }
-    }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun YearFilterChip(
-    yearRange: IntRange?,
-    bounds: IntRange,
-    onApply: (IntRange?) -> Unit
-) {
-    var dialogOpen by remember { mutableStateOf(false) }
-    FilterChip(
-        selected = yearRange != null,
-        onClick = { dialogOpen = true },
-        label = { Text(yearRange?.let { "${it.first}–${it.last}" } ?: "Год") },
-        trailingIcon = {
-            if (yearRange != null) {
-                Icon(
-                    Icons.Default.Clear,
-                    contentDescription = "Сбросить год",
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clickable { onApply(null) }
-                )
-            }
-        }
-    )
-    if (dialogOpen) {
-        var sliderValue by remember {
-            mutableStateOf(
-                (yearRange?.first ?: bounds.first).toFloat()..(yearRange?.last ?: bounds.last).toFloat()
-            )
-        }
-        AlertDialog(
-            onDismissRequest = { dialogOpen = false },
-            title = { Text("Год выпуска") },
-            text = {
-                Column {
-                    Text(
-                        "${sliderValue.start.roundToInt()} – ${sliderValue.endInclusive.roundToInt()}",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    RangeSlider(
-                        value = sliderValue,
-                        onValueChange = { sliderValue = it },
-                        valueRange = bounds.first.toFloat()..bounds.last.toFloat(),
-                        steps = (bounds.last - bounds.first - 1).coerceAtLeast(0)
+            Spacer(Modifier.height(20.dp))
+            Text("Сортировка", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SortOrder.entries.forEach { option ->
+                    FilterChip(
+                        selected = sortOrder == option,
+                        onClick = { onSetSortOrder(option) },
+                        label = { Text(option.label) }
                     )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onApply(sliderValue.start.roundToInt()..sliderValue.endInclusive.roundToInt())
-                    dialogOpen = false
-                }) { Text("Применить") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    onApply(null)
-                    dialogOpen = false
-                }) { Text("Сбросить") }
             }
-        )
+
+            if (availableGenres.isNotEmpty()) {
+                Spacer(Modifier.height(20.dp))
+                Text("Жанр", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = selectedGenre == null,
+                        onClick = { onSetGenre(null) },
+                        label = { Text("Все жанры") }
+                    )
+                    availableGenres.forEach { genre ->
+                        FilterChip(
+                            selected = genre == selectedGenre,
+                            onClick = { onSetGenre(if (genre == selectedGenre) null else genre) },
+                            label = { Text(genre) }
+                        )
+                    }
+                }
+            }
+
+            if (availableYearBounds != null) {
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    "Год выпуска: ${yearSliderValue.start.roundToInt()} – ${yearSliderValue.endInclusive.roundToInt()}",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.height(8.dp))
+                RangeSlider(
+                    value = yearSliderValue,
+                    onValueChange = {
+                        yearSliderValue = it
+                        onSetYearRange(it.start.roundToInt()..it.endInclusive.roundToInt())
+                    },
+                    valueRange = availableYearBounds.first.toFloat()..availableYearBounds.last.toFloat(),
+                    steps = (availableYearBounds.last - availableYearBounds.first - 1).coerceAtLeast(0)
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Row {
+                TextButton(onClick = {
+                    onSetFilter(LibraryFilter.ALL)
+                    onSetGenre(null)
+                    onSetYearRange(null)
+                }) { Text("Сбросить фильтры") }
+                Spacer(Modifier.weight(1f))
+                Button(onClick = onDismiss) { Text("Готово") }
+            }
+        }
     }
 }
 

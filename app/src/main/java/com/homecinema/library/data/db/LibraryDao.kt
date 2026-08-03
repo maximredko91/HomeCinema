@@ -49,6 +49,19 @@ interface LibraryDao {
     @Query("UPDATE media_items SET downloadState = :state, downloadProgress = :progress, localFilePath = :localPath WHERE id = :id")
     suspend fun updateDownloadResult(id: String, state: DownloadState, progress: Int, localPath: String?)
 
-    @Query("UPDATE media_items SET playbackPositionMs = :positionMs, durationMs = :durationMs WHERE id = :id")
-    suspend fun updatePlaybackProgress(id: String, positionMs: Long, durationMs: Long)
+    @Query(
+        "UPDATE media_items SET playbackPositionMs = :positionMs, durationMs = :durationMs, " +
+            "lastPlayedAt = :playedAt WHERE id = :id"
+    )
+    suspend fun updatePlaybackProgress(id: String, positionMs: Long, durationMs: Long, playedAt: Long)
+
+    // Movies/cartoons/episodes started but not finished, most recently played first - for
+    // the "Продолжить просмотр" row. (durationMs > 0 excludes rows that never got a real
+    // checkpoint; the 0.95 cutoff matches PlayerScreen's own "basically finished" threshold.)
+    @Query(
+        "SELECT * FROM media_items WHERE mediaType != 'TV_SHOW' AND mediaType != 'CARTOON_SERIES' " +
+            "AND durationMs > 0 AND playbackPositionMs > 5000 AND playbackPositionMs < durationMs * 0.95 " +
+            "ORDER BY lastPlayedAt DESC LIMIT 20"
+    )
+    fun observeContinueWatching(): Flow<List<MediaItemEntity>>
 }

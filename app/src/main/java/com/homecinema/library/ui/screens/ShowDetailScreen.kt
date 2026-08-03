@@ -1,6 +1,7 @@
 package com.homecinema.library.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +24,7 @@ import coil.compose.AsyncImage
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.ui.components.DownloadControlRow
+import com.homecinema.library.ui.components.ZoomableImageDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,6 +41,7 @@ fun ShowDetailScreen(
     val show by app.repository.observeById(showId).collectAsState(initial = null)
     val episodes by app.repository.observeEpisodesForShow(showId).collectAsState(initial = emptyList())
     val liveProgressMap by app.downloadManager.liveProgress.collectAsState()
+    var zoomedImage by remember { mutableStateOf<String?>(null) }
 
     val bySeason = episodes.groupBy { it.season ?: 1 }.toSortedMap()
 
@@ -66,7 +69,7 @@ fun ShowDetailScreen(
             contentPadding = PaddingValues(16.dp)
         ) {
             show?.let { current ->
-                item { ShowHeader(current) }
+                item { ShowHeader(current, onImageClick = { path -> zoomedImage = path }) }
             }
             bySeason.forEach { (season, seasonEpisodes) ->
                 item {
@@ -91,10 +94,14 @@ fun ShowDetailScreen(
             }
         }
     }
+
+    zoomedImage?.let { path ->
+        ZoomableImageDialog(imagePath = path, onDismiss = { zoomedImage = null })
+    }
 }
 
 @Composable
-private fun ShowHeader(show: MediaItemEntity) {
+private fun ShowHeader(show: MediaItemEntity, onImageClick: (String) -> Unit) {
     Column(Modifier.padding(bottom = 16.dp)) {
         if (show.fanartLocalPath != null) {
             AsyncImage(
@@ -105,6 +112,7 @@ private fun ShowHeader(show: MediaItemEntity) {
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(12.dp))
+                    .clickable { onImageClick(show.fanartLocalPath) }
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -116,6 +124,7 @@ private fun ShowHeader(show: MediaItemEntity) {
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .let { if (show.posterLocalPath != null) it.clickable { onImageClick(show.posterLocalPath) } else it }
             ) {
                 if (show.posterLocalPath != null) {
                     AsyncImage(

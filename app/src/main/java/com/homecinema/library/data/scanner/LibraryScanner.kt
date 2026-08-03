@@ -35,7 +35,10 @@ private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
 // "poster.jpg" used at TV show roots - so movies need a broader match than POSTER_NAMES.
 private val MOVIE_POSTER_SUFFIXES = listOf("-poster", "-folder", "-cover", "")
 private val MOVIE_FANART_SUFFIXES = listOf("-fanart", "-backdrop", "-landscape")
-private val EPISODE_THUMB_SUFFIXES = listOf("-thumb")
+// Kodi scrapers name episode thumbnails either "<episode>-thumb.jpg" or, just as often,
+// with the exact same basename as the video ("S01E01.mkv" + "S01E01.jpg") - the "" suffix
+// covers that second, very common case.
+private val EPISODE_THUMB_SUFFIXES = listOf("-thumb", "")
 private const val MAX_ACTORS = 8
 
 class LibraryScanner(
@@ -77,7 +80,8 @@ class LibraryScanner(
                         downloadState = existing.downloadState,
                         downloadProgress = existing.downloadProgress,
                         playbackPositionMs = existing.playbackPositionMs,
-                        durationMs = existing.durationMs
+                        durationMs = existing.durationMs,
+                        lastPlayedAt = existing.lastPlayedAt
                     )
                 } else fresh
             }

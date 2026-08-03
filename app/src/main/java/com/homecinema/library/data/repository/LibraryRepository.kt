@@ -30,6 +30,8 @@ class LibraryRepository(
 
     fun observeDownloaded(): Flow<List<MediaItemEntity>> = dao.observeDownloaded()
 
+    fun observeContinueWatching(): Flow<List<MediaItemEntity>> = dao.observeContinueWatching()
+
     fun observeById(id: String): Flow<MediaItemEntity?> = dao.observeById(id)
 
     suspend fun getById(id: String): MediaItemEntity? = dao.getById(id)
@@ -37,7 +39,7 @@ class LibraryRepository(
     suspend fun rescan(onProgress: (ScanProgress) -> Unit) = scanner.scan(onProgress)
 
     suspend fun updatePlaybackProgress(id: String, positionMs: Long, durationMs: Long) =
-        dao.updatePlaybackProgress(id, positionMs, durationMs)
+        dao.updatePlaybackProgress(id, positionMs, durationMs, System.currentTimeMillis())
 
     /** Deletes cached poster images. Missing posters are re-downloaded on the next rescan. */
     suspend fun clearPosterCache() = withContext(Dispatchers.IO) {

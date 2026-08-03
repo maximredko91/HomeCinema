@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +27,7 @@ import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.ui.components.DownloadControlRow
+import com.homecinema.library.ui.components.ZoomableImageDialog
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -44,6 +46,7 @@ fun DetailScreen(
     val item by app.repository.observeById(itemId).collectAsState(initial = null)
     val liveProgressMap by app.downloadManager.liveProgress.collectAsState()
     val playbackMode by app.settingsStore.playbackModeFlow.collectAsState(initial = PlaybackMode.ASK)
+    var zoomedImage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -74,6 +77,7 @@ fun DetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
+                        .clickable { zoomedImage = current.fanartLocalPath }
                 )
             }
 
@@ -85,6 +89,7 @@ fun DetailScreen(
                         .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .let { if (current.posterLocalPath != null) it.clickable { zoomedImage = current.posterLocalPath } else it }
                 ) {
                     if (current.posterLocalPath != null) {
                         AsyncImage(
@@ -182,6 +187,10 @@ fun DetailScreen(
             }
             }
         }
+    }
+
+    zoomedImage?.let { path ->
+        ZoomableImageDialog(imagePath = path, onDismiss = { zoomedImage = null })
     }
 }
 

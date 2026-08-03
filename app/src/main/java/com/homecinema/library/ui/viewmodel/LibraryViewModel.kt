@@ -126,6 +126,10 @@ class LibraryViewModel : ViewModel() {
     val gridColumns: StateFlow<Int> = app.settingsStore.gridColumnsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2)
 
+    /** In-progress movies/cartoons/episodes, most recently played first. */
+    val continueWatching: StateFlow<List<MediaItemEntity>> = app.repository.observeContinueWatching()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
         // Best-effort "keep the library fresh" - runs once per app process (this ViewModel
         // lives as long as the start-destination screen does), gated to at most once a day

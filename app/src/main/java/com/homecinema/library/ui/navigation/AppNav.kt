@@ -31,7 +31,8 @@ fun AppNavHost() {
             LibraryScreen(
                 onOpenDetail = { id -> navController.navigate("detail/$id") },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) }
+                onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
+                onPlayItem = { id -> navController.navigate("player/$id") }
             )
         }
         composable(Routes.SETTINGS) {
