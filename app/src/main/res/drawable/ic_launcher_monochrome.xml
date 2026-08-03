@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single-color layer for Android 13+ themed (Material You) icons - the system re-tints
+     this itself, so the actual color here doesn't matter, only the shape does. The square
+     and the play triangle are one path with an even-odd fill so the triangle punches out
+     as a hole, matching ic_launcher_foreground's two-tone look in a single color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M38,26 L70,26 A12,12 0 0 1 82,38 L82,70 A12,12 0 0 1 70,82 L38,82 A12,12 0 0 1 26,70 L26,38 A12,12 0 0 1 38,26 Z
+                           M46,40 L46,68 L70,54 Z" />
+</vector>

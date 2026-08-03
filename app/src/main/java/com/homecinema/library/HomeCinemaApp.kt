@@ -12,6 +12,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import java.security.Security
 
 /**
  * Simple hand-rolled service locator (no Hilt/Dagger to keep the project
@@ -36,6 +38,14 @@ class HomeCinemaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // jcifs-ng needs MD4 (for NTLM auth) from Bouncy Castle, which it depends on as a
+        // real library - but Android ships its own stripped-down provider already
+        // registered under the same name "BC", missing MD4 and some others. Unless the
+        // real implementation is explicitly inserted ahead of it, "BC" resolves to
+        // Android's incomplete one and every SMB connection fails with
+        // NoSuchAlgorithmException, even though nothing looks wrong at compile time.
+        Security.insertProviderAt(BouncyCastleProvider(), 1)
 
         settingsStore = SettingsStore(this)
         smbManager = SmbManager()

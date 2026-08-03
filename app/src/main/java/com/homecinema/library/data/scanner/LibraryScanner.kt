@@ -15,10 +15,16 @@ import com.homecinema.library.data.smb.SmbSourceResolver
 import com.homecinema.library.data.smb.toSmbConfig
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
 
 sealed class ScanProgress {
     data class Scanning(val filesFound: Int) : ScanProgress()
@@ -41,6 +47,15 @@ private val MOVIE_FANART_SUFFIXES = listOf("-fanart", "-backdrop", "-landscape")
 // covers that second, very common case.
 private val EPISODE_THUMB_SUFFIXES = listOf("-thumb", "")
 private const val MAX_ACTORS = 8
+// How many NFO/image reads can be in flight over SMB at once. Each one is a blocking
+// network round-trip; running them one at a time made a several-thousand-title library
+// take many minutes, almost all of it spent waiting rather than actually transferring
+// bytes. Kept modest since this is still one shared session/router, not a datacenter.
+private const val MAX_CONCURRENT_IO = 6
+// How many titles to write to the database per batch while scanning. The library screen
+// observes this table, so writing incrementally (instead of once at the very end) is what
+// makes titles appear as they're found rather than only once the whole scan is done.
+private const val FLUSH_BATCH_SIZE = 30
 
 class LibraryScanner(
     private val smbManager: SmbManager,
@@ -53,6 +68,7 @@ class LibraryScanner(
     private val posterCacheDir: File by lazy {
         File(context.cacheDir, "posters").apply { mkdirs() }
     }
+    private val ioSemaphore = Semaphore(MAX_CONCURRENT_IO)
 
     suspend fun scan(onProgress: (ScanProgress) -> Unit) = withContext(Dispatchers.IO) {
         try {
@@ -78,196 +94,246 @@ class LibraryScanner(
                 }
             }
 
-            // Preserve any existing download/playback progress when re-scanning.
-            val merged = allResults.map { fresh ->
-                val existing = dao.getById(fresh.id)
-                if (existing != null) {
-                    fresh.copy(
-                        localFilePath = existing.localFilePath,
-                        downloadState = existing.downloadState,
-                        downloadProgress = existing.downloadProgress,
-                        playbackPositionMs = existing.playbackPositionMs,
-                        durationMs = existing.durationMs,
-                        lastPlayedAt = existing.lastPlayedAt
-                    )
-                } else fresh
-            }
-
-            dao.upsertAll(merged)
-            dao.deleteMissingTopLevel(merged.filter { it.mediaType != MediaType.EPISODE }.map { it.folderPath })
-            dao.deleteMissingEpisodes(merged.filter { it.mediaType == MediaType.EPISODE }.map { it.id })
+            // Cleanup needs the complete picture across every source, so it stays a final
+            // step - deleting per-source-as-you-go would make everything from source B look
+            // "missing" while source A was still being scanned.
+            dao.deleteMissingTopLevel(allResults.filter { it.mediaType != MediaType.EPISODE }.map { it.folderPath })
+            dao.deleteMissingEpisodes(allResults.filter { it.mediaType == MediaType.EPISODE }.map { it.id })
 
             if (errors.isNotEmpty()) {
-                onProgress(ScanProgress.Error("Найдено ${merged.size} тайтлов. Ошибки: ${errors.joinToString("; ")}"))
+                onProgress(ScanProgress.Error("Найдено ${allResults.size} тайтлов. Ошибки: ${errors.joinToString("; ")}"))
             } else {
-                onProgress(ScanProgress.Done(merged.size))
+                onProgress(ScanProgress.Done(allResults.size))
             }
         } catch (e: Exception) {
             onProgress(ScanProgress.Error(e.message ?: "Unknown error while scanning"))
         }
     }
 
-    /** Scans a single configured source and returns its raw results (not yet merged/saved). */
+    /** Scans a single configured source and returns its raw results (not yet merged/saved
+     * for cleanup bookkeeping in [scan] - the actual DB writes happen incrementally via
+     * [flush] as each show/batch of movies finishes, not from this return value). */
     private suspend fun scanSource(source: SmbSourceEntity, onProgress: (ScanProgress) -> Unit): List<MediaItemEntity> {
-            val config = sourceResolver.withRealPassword(source).toSmbConfig()
-            val allFiles = smbManager.listAllFilesRecursive(source.id, config)
-            onProgress(ScanProgress.Scanning(allFiles.size))
+        val config = sourceResolver.withRealPassword(source).toSmbConfig()
+        val allFiles = smbManager.listAllFilesRecursive(source.id, config)
+        onProgress(ScanProgress.Scanning(allFiles.size))
 
-            val byFolder = allFiles.groupBy { parentPath(it) }
+        val byFolder = allFiles.groupBy { parentPath(it) }
 
-            // Pass 1: find every folder that is a TV/cartoon-series root (has a tvshow.nfo).
-            val showRootPaths = byFolder.filterValues { files ->
-                files.any { it.name.equals("tvshow.nfo", ignoreCase = true) }
-            }.keys
+        // Pass 1: find every folder that is a TV/cartoon-series root (has a tvshow.nfo).
+        val showRootPaths = byFolder.filterValues { files ->
+            files.any { it.name.equals("tvshow.nfo", ignoreCase = true) }
+        }.keys
 
-            fun showRootFor(folderPath: String): String? =
-                showRootPaths.firstOrNull { root -> folderPath == root || folderPath.startsWith(root) }
+        fun showRootFor(folderPath: String): String? =
+            showRootPaths.firstOrNull { root -> folderPath == root || folderPath.startsWith(root) }
 
-            val results = mutableListOf<MediaItemEntity>()
+        val results = mutableListOf<MediaItemEntity>()
+        val totalFolders = byFolder.size
+        val processed = AtomicInteger(0)
 
-            // Pass 2: build one shell entity per show root, from its tvshow.nfo + poster.
-            var processed = 0
-            val totalFolders = byFolder.size
-            for (showRoot in showRootPaths) {
-                processed++
-                val files = byFolder[showRoot].orEmpty()
-                val nfoFile = files.first { it.name.equals("tvshow.nfo", ignoreCase = true) }
-                val nfoData = runCatching { NfoParser.parse(nfoFile.inputStream) }.getOrNull()
-                val posterFile = files.firstOrNull { it.name.lowercase() in POSTER_NAMES }
-                val fanartFile = files.firstOrNull { it.name.lowercase() in FANART_NAMES }
+        // Pass 2: one shell entity per show root, from its tvshow.nfo + poster, plus every
+        // episode underneath it. Episodes within a show are scanned concurrently (bounded
+        // by ioSemaphore) since each needs its own NFO + thumbnail round-trip over SMB.
+        for (showRoot in showRootPaths) {
+            val files = byFolder[showRoot].orEmpty()
+            val nfoFile = files.first { it.name.equals("tvshow.nfo", ignoreCase = true) }
+            val nfoData = runCatching { NfoParser.parse(nfoFile.inputStream) }.getOrNull()
+            val posterFile = files.firstOrNull { it.name.lowercase() in POSTER_NAMES }
+            val fanartFile = files.firstOrNull { it.name.lowercase() in FANART_NAMES }
 
-                val id = hashOf(showRoot)
-                val title = nfoData?.title?.takeIf { it.isNotBlank() } ?: showRoot.trimEnd('/').substringAfterLast('/')
-                val mediaType = if (nfoData?.genres.orEmpty().looksAnimated()) MediaType.CARTOON_SERIES else MediaType.TV_SHOW
+            val id = hashOf(showRoot)
+            val title = nfoData?.title?.takeIf { it.isNotBlank() } ?: showRoot.trimEnd('/').substringAfterLast('/')
+            val mediaType = if (nfoData?.genres.orEmpty().looksAnimated()) MediaType.CARTOON_SERIES else MediaType.TV_SHOW
 
-                onProgress(ScanProgress.Parsing(processed, totalFolders, title))
-                val posterLocalPath = posterFile?.let { cacheImage(it, id, "") }
-                val fanartLocalPath = fanartFile?.let { cacheImage(it, id, "-fanart") }
+            onProgress(ScanProgress.Parsing(processed.incrementAndGet(), totalFolders, title))
+            val posterLocalPath = posterFile?.let { cacheImage(it, id, "") }
+            val fanartLocalPath = fanartFile?.let { cacheImage(it, id, "-fanart") }
 
-                results.add(
-                    MediaItemEntity(
-                        id = id,
-                        title = title,
-                        year = nfoData?.year,
-                        genres = nfoData?.genres?.joinToString(", ").orEmpty(),
-                        plot = nfoData?.plot.orEmpty(),
-                        rating = nfoData?.rating,
-                        mediaType = mediaType,
-                        folderPath = showRoot,
-                        videoFilePath = "", // shells are not directly playable
-                        posterLocalPath = posterLocalPath,
-                        lastScanned = System.currentTimeMillis(),
-                        sourceId = source.id,
-                        fanartLocalPath = fanartLocalPath,
-                        runtimeMinutes = nfoData?.runtimeMinutes,
-                        country = nfoData?.country,
-                        director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
-                        actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
-                        collectionName = nfoData?.collectionName
-                    )
-                )
+            val showEntity = MediaItemEntity(
+                id = id,
+                title = title,
+                year = nfoData?.year,
+                genres = nfoData?.genres?.joinToString(", ").orEmpty(),
+                plot = nfoData?.plot.orEmpty(),
+                rating = nfoData?.rating,
+                mediaType = mediaType,
+                folderPath = showRoot,
+                videoFilePath = "", // shells are not directly playable
+                posterLocalPath = posterLocalPath,
+                lastScanned = System.currentTimeMillis(),
+                sourceId = source.id,
+                fanartLocalPath = fanartLocalPath,
+                runtimeMinutes = nfoData?.runtimeMinutes,
+                country = nfoData?.country,
+                director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
+                actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
+                collectionName = nfoData?.collectionName
+            )
 
-                // Episodes: every video file anywhere under this show root.
-                val episodeVideoFiles = allFiles.filter { f ->
-                    val p = parentPath(f)
-                    (p == showRoot || p.startsWith(showRoot)) && extensionOf(f.name) in VIDEO_EXTENSIONS
-                }
-                episodeVideoFiles.forEachIndexed { index, videoFile ->
-                    val episodeFolder = byFolder[parentPath(videoFile)].orEmpty()
-                    val matchingNfo = episodeFolder.firstOrNull {
-                        it.name.equals(videoFile.name.substringBeforeLast('.') + ".nfo", ignoreCase = true)
-                    } ?: episodeFolder.firstOrNull { it.name.endsWith(".nfo", ignoreCase = true) }
-
-                    val epNfo: NfoData? = matchingNfo?.let { runCatching { NfoParser.parse(it.inputStream) }.getOrNull() }
-                    val filenameGuess = EpisodeFilenamePattern.extract(videoFile.name)
-
-                    val season = epNfo?.season ?: filenameGuess?.first ?: 1
-                    val episodeNum = epNfo?.episode ?: filenameGuess?.second ?: (index + 1)
-                    val epTitle = epNfo?.title?.takeIf { it.isNotBlank() }
-                        ?: videoFile.name.substringBeforeLast('.')
-
-                    val epId = hashOf(videoFile.path)
-                    // Kodi/scrapers usually drop a "<episode>-thumb.jpg" next to the video -
-                    // shown in the episode list instead of just the parent show's poster.
-                    val thumbFile = findImageFile(episodeFolder, videoFile.name, emptySet(), EPISODE_THUMB_SUFFIXES)
-                    val thumbLocalPath = thumbFile?.let { cacheImage(it, epId, "") }
-                    results.add(
-                        MediaItemEntity(
-                            id = epId,
-                            title = epTitle,
-                            year = null,
-                            genres = "",
-                            plot = epNfo?.plot.orEmpty(),
-                            rating = epNfo?.rating,
-                            mediaType = MediaType.EPISODE,
-                            folderPath = parentPath(videoFile),
-                            videoFilePath = videoFile.path,
-                            posterLocalPath = thumbLocalPath,
-                            lastScanned = System.currentTimeMillis(),
-                            sourceId = source.id,
-                            parentShowId = id,
-                            season = season,
-                            episodeNumber = episodeNum
-                        )
-                    )
-                }
+            val episodeVideoFiles = allFiles.filter { f ->
+                val p = parentPath(f)
+                (p == showRoot || p.startsWith(showRoot)) && extensionOf(f.name) in VIDEO_EXTENSIONS
+            }
+            val episodeEntities = coroutineScope {
+                episodeVideoFiles.mapIndexed { index, videoFile ->
+                    async {
+                        ioSemaphore.withPermit {
+                            buildEpisodeEntity(source.id, id, index, videoFile, byFolder[parentPath(videoFile)].orEmpty())
+                        }
+                    }
+                }.awaitAll()
             }
 
-            // Pass 3: everything else - standalone movies/cartoons, one per remaining folder.
-            val movieFolders = byFolder.keys.filter { showRootFor(it) == null }
-            movieFolders.forEachIndexed { index, folderPath ->
-                processed++
-                val files = byFolder[folderPath].orEmpty()
-                val videoFile = files
-                    .filter { extensionOf(it.name) in VIDEO_EXTENSIONS }
-                    .filterNot { it.name.contains("trailer", ignoreCase = true) }
-                    .maxByOrNull { runCatching { it.length() }.getOrDefault(0L) }
-                    ?: return@forEachIndexed // no playable video here, skip folder
+            results.add(showEntity)
+            results.addAll(episodeEntities)
+            flush(listOf(showEntity) + episodeEntities)
+        }
 
-                val nfoFile = files.firstOrNull { it.name.endsWith(".nfo", ignoreCase = true) }
-                val posterFile = findImageFile(files, videoFile.name, POSTER_NAMES, MOVIE_POSTER_SUFFIXES)
-                val fanartFile = findImageFile(files, videoFile.name, FANART_NAMES, MOVIE_FANART_SUFFIXES)
-                val nfoData = nfoFile?.let { f -> runCatching { NfoParser.parse(f.inputStream) }.getOrNull() }
-
-                val id = hashOf(folderPath)
-                val title = nfoData?.title?.takeIf { it.isNotBlank() } ?: videoFile.name.substringBeforeLast('.')
-                val mediaType = if (nfoData?.genres.orEmpty().looksAnimated()) MediaType.CARTOON else MediaType.MOVIE
-
-                onProgress(ScanProgress.Parsing(processed, totalFolders, title))
-                val posterLocalPath = posterFile?.let { cacheImage(it, id, "") }
-                val fanartLocalPath = fanartFile?.let { cacheImage(it, id, "-fanart") }
-
-                results.add(
-                    MediaItemEntity(
-                        id = id,
-                        title = title,
-                        year = nfoData?.year,
-                        genres = nfoData?.genres?.joinToString(", ").orEmpty(),
-                        plot = nfoData?.plot.orEmpty(),
-                        rating = nfoData?.rating,
-                        mediaType = mediaType,
-                        folderPath = folderPath,
-                        videoFilePath = videoFile.path,
-                        posterLocalPath = posterLocalPath,
-                        lastScanned = System.currentTimeMillis(),
-                        sourceId = source.id,
-                        fanartLocalPath = fanartLocalPath,
-                        runtimeMinutes = nfoData?.runtimeMinutes,
-                        country = nfoData?.country,
-                        director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
-                        actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
-                        collectionName = nfoData?.collectionName
-                    )
-                )
+        // Pass 3: everything else - standalone movies/cartoons, one per remaining folder.
+        // Same concurrency treatment, batched so the library fills in as it goes rather
+        // than staying empty until all several thousand folders are done.
+        val movieFolders = byFolder.keys.filter { showRootFor(it) == null }
+        for (chunk in movieFolders.chunked(FLUSH_BATCH_SIZE)) {
+            val entities = coroutineScope {
+                chunk.map { folderPath ->
+                    async {
+                        ioSemaphore.withPermit {
+                            buildMovieEntity(source.id, folderPath, byFolder[folderPath].orEmpty(), totalFolders, processed, onProgress)
+                        }
+                    }
+                }.awaitAll().filterNotNull()
             }
+            results.addAll(entities)
+            flush(entities)
+        }
 
-            return results
+        return results
+    }
+
+    private fun buildEpisodeEntity(
+        sourceId: String,
+        showId: String,
+        index: Int,
+        videoFile: SmbFile,
+        episodeFolder: List<SmbFile>
+    ): MediaItemEntity {
+        val matchingNfo = episodeFolder.firstOrNull {
+            it.name.equals(videoFile.name.substringBeforeLast('.') + ".nfo", ignoreCase = true)
+        } ?: episodeFolder.firstOrNull { it.name.endsWith(".nfo", ignoreCase = true) }
+
+        val epNfo: NfoData? = matchingNfo?.let { runCatching { NfoParser.parse(it.inputStream) }.getOrNull() }
+        val filenameGuess = EpisodeFilenamePattern.extract(videoFile.name)
+
+        val season = epNfo?.season ?: filenameGuess?.first ?: 1
+        val episodeNum = epNfo?.episode ?: filenameGuess?.second ?: (index + 1)
+        val epTitle = epNfo?.title?.takeIf { it.isNotBlank() } ?: videoFile.name.substringBeforeLast('.')
+
+        val epId = hashOf(videoFile.path)
+        // Kodi/scrapers usually drop a "<episode>-thumb.jpg" next to the video - shown in
+        // the episode list instead of just the parent show's poster.
+        val thumbFile = findImageFile(episodeFolder, videoFile.name, emptySet(), EPISODE_THUMB_SUFFIXES)
+        val thumbLocalPath = thumbFile?.let { cacheImage(it, epId, "") }
+
+        return MediaItemEntity(
+            id = epId,
+            title = epTitle,
+            year = null,
+            genres = "",
+            plot = epNfo?.plot.orEmpty(),
+            rating = epNfo?.rating,
+            mediaType = MediaType.EPISODE,
+            folderPath = parentPath(videoFile),
+            videoFilePath = videoFile.path,
+            posterLocalPath = thumbLocalPath,
+            lastScanned = System.currentTimeMillis(),
+            sourceId = sourceId,
+            parentShowId = showId,
+            season = season,
+            episodeNumber = episodeNum
+        )
+    }
+
+    private fun buildMovieEntity(
+        sourceId: String,
+        folderPath: String,
+        files: List<SmbFile>,
+        totalFolders: Int,
+        processed: AtomicInteger,
+        onProgress: (ScanProgress) -> Unit
+    ): MediaItemEntity? {
+        val videoFile = files
+            .filter { extensionOf(it.name) in VIDEO_EXTENSIONS }
+            .filterNot { it.name.contains("trailer", ignoreCase = true) }
+            .maxByOrNull { runCatching { it.length() }.getOrDefault(0L) }
+            ?: return null // no playable video here, skip folder
+
+        val nfoFile = files.firstOrNull { it.name.endsWith(".nfo", ignoreCase = true) }
+        val posterFile = findImageFile(files, videoFile.name, POSTER_NAMES, MOVIE_POSTER_SUFFIXES)
+        val fanartFile = findImageFile(files, videoFile.name, FANART_NAMES, MOVIE_FANART_SUFFIXES)
+        val nfoData = nfoFile?.let { f -> runCatching { NfoParser.parse(f.inputStream) }.getOrNull() }
+
+        val id = hashOf(folderPath)
+        val title = nfoData?.title?.takeIf { it.isNotBlank() } ?: videoFile.name.substringBeforeLast('.')
+        val mediaType = if (nfoData?.genres.orEmpty().looksAnimated()) MediaType.CARTOON else MediaType.MOVIE
+
+        onProgress(ScanProgress.Parsing(processed.incrementAndGet(), totalFolders, title))
+        val posterLocalPath = posterFile?.let { cacheImage(it, id, "") }
+        val fanartLocalPath = fanartFile?.let { cacheImage(it, id, "-fanart") }
+
+        return MediaItemEntity(
+            id = id,
+            title = title,
+            year = nfoData?.year,
+            genres = nfoData?.genres?.joinToString(", ").orEmpty(),
+            plot = nfoData?.plot.orEmpty(),
+            rating = nfoData?.rating,
+            mediaType = mediaType,
+            folderPath = folderPath,
+            videoFilePath = videoFile.path,
+            posterLocalPath = posterLocalPath,
+            lastScanned = System.currentTimeMillis(),
+            sourceId = sourceId,
+            fanartLocalPath = fanartLocalPath,
+            runtimeMinutes = nfoData?.runtimeMinutes,
+            country = nfoData?.country,
+            director = nfoData?.directors.orEmpty().joinToString(", ").ifBlank { null },
+            actors = nfoData?.actors.orEmpty().take(MAX_ACTORS).joinToString(", ").ifBlank { null },
+            collectionName = nfoData?.collectionName
+        )
+    }
+
+    /** Merges fresh results with whatever's already saved for those ids (so a rescan
+     * doesn't clobber download/playback progress) and writes them immediately - called
+     * repeatedly as the scan progresses, which is what makes titles show up in the library
+     * live instead of only once the entire scan (all NFOs, all images) has finished. */
+    private suspend fun flush(batch: List<MediaItemEntity>) {
+        if (batch.isEmpty()) return
+        val existingById = dao.getByIds(batch.map { it.id }).associateBy { it.id }
+        val merged = batch.map { fresh ->
+            existingById[fresh.id]?.let { existing ->
+                fresh.copy(
+                    localFilePath = existing.localFilePath,
+                    downloadState = existing.downloadState,
+                    downloadProgress = existing.downloadProgress,
+                    playbackPositionMs = existing.playbackPositionMs,
+                    durationMs = existing.durationMs,
+                    lastPlayedAt = existing.lastPlayedAt
+                )
+            } ?: fresh
+        }
+        dao.upsertAll(merged)
     }
 
     private fun cacheImage(smbFile: SmbFile, id: String, suffix: String): String? {
         return try {
             val ext = extensionOf(smbFile.name).ifBlank { "jpg" }
             val dest = File(posterCacheDir, "$id$suffix.$ext")
+            // Posters/fanarts/thumbnails essentially never change once scraped - on a
+            // rescan, re-downloading an image that's already sitting on disk was pure
+            // wasted network time, multiplied by every image in the whole library, every
+            // single rescan (including the automatic one on every app launch).
+            if (dest.exists() && dest.length() > 0) return dest.absolutePath
             smbFile.inputStream.use { input ->
                 dest.outputStream().use { output -> input.copyTo(output) }
             }

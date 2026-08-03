@@ -1,6 +1,7 @@
 package com.homecinema.library.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -39,11 +40,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.homecinema.library.R
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.scanner.ScanProgress
 import com.homecinema.library.ui.components.MediaPosterCard
@@ -125,12 +128,17 @@ fun LibraryScreen(
                             )
                         )
                         LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
-                    } else {
+                    } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
                         Text(
-                            text = if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) selectedCollection!!
-                                else "Моя коллекция",
+                            text = selectedCollection!!,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(R.drawable.ic_app_logo),
+                            contentDescription = "Home Cinema",
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 },

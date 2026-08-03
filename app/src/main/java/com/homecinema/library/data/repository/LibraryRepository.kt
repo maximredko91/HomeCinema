@@ -59,17 +59,21 @@ class LibraryRepository(
      * editing or for anything that actually needs to connect. */
     suspend fun getSource(id: String): SmbSourceEntity? = sourceResolver.resolve(id)
 
-    /** The password never gets written into Room - it goes to the encrypted CredentialStore
-     * instead, so a copy of the (unencrypted) app database never carries it. */
+    /** The password normally goes to the encrypted CredentialStore rather than Room, so a
+     * copy of the (unencrypted) app database doesn't carry it. But CredentialStore touches
+     * Android Keystore/Tink, which can fail on a given device or build for reasons outside
+     * our control - if it does, the source must still get saved (with the password sitting
+     * in Room as a fallback) rather than silently vanishing, which previously showed up as
+     * "0 titles found, no error" with no clue why. */
     suspend fun saveSource(source: SmbSourceEntity) {
-        credentialStore.setPassword(source.id, source.password)
-        sourceDao.upsert(source.copy(password = ""))
+        val encrypted = runCatching { credentialStore.setPassword(source.id, source.password) }.isSuccess
+        sourceDao.upsert(source.copy(password = if (encrypted) "" else source.password))
         smbManager.invalidateCache(source.id)
     }
 
     suspend fun deleteSource(id: String) {
         sourceDao.delete(id)
-        credentialStore.deletePassword(id)
+        runCatching { credentialStore.deletePassword(id) }
         smbManager.invalidateCache(id)
     }
 
@@ -83,7 +87,7 @@ class LibraryRepository(
         val legacy = settingsStore.currentConfig()
         if (!legacy.isConfigured) return
         val id = UUID.randomUUID().toString()
-        credentialStore.setPassword(id, legacy.password)
+        val encrypted = runCatching { credentialStore.setPassword(id, legacy.password) }.isSuccess
         sourceDao.upsert(
             SmbSourceEntity(
                 id = id,
@@ -93,7 +97,7 @@ class LibraryRepository(
                 rootPath = legacy.rootPath,
                 domain = legacy.domain,
                 username = legacy.username,
-                password = "",
+                password = if (encrypted) "" else legacy.password,
                 guest = legacy.guest
             )
         )

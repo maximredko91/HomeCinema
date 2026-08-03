@@ -19,6 +19,11 @@ interface LibraryDao {
     @Query("SELECT * FROM media_items WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): MediaItemEntity?
 
+    // Bulk lookup used by the scanner to preserve download/playback progress when merging
+    // a freshly-scanned batch - one query per batch instead of one per item.
+    @Query("SELECT * FROM media_items WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<String>): List<MediaItemEntity>
+
     @Query("SELECT * FROM media_items WHERE id = :id LIMIT 1")
     fun observeById(id: String): Flow<MediaItemEntity?>
 

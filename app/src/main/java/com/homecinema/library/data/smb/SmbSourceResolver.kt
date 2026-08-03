@@ -21,13 +21,15 @@ class SmbSourceResolver(
         sourceDao.getById(sourceId)?.let { withRealPassword(it) }
 
     suspend fun withRealPassword(source: SmbSourceEntity): SmbSourceEntity {
-        val stored = credentialStore.getPassword(source.id)
+        // A CredentialStore failure here must not make an otherwise-working source
+        // unreachable - fall back to whatever Room has (normally blank, but see the
+        // migration note above) rather than throwing and aborting the whole scan/connect.
+        val stored = runCatching { credentialStore.getPassword(source.id) }.getOrDefault("")
         if (stored.isNotEmpty()) return source.copy(password = stored)
+        if (source.password.isEmpty()) return source
 
-        if (source.password.isNotEmpty()) {
-            credentialStore.setPassword(source.id, source.password)
-            sourceDao.upsert(source.copy(password = ""))
-        }
+        runCatching { credentialStore.setPassword(source.id, source.password) }
+            .onSuccess { sourceDao.upsert(source.copy(password = "")) }
         return source
     }
 }

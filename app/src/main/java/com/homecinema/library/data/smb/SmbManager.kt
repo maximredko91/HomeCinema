@@ -8,9 +8,15 @@ import jcifs.context.BaseContext
 import jcifs.smb.NtlmPasswordAuthenticator
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 fun SmbSourceEntity.toSmbConfig(): SmbConfig = SmbConfig(
     host = host,
@@ -31,6 +37,8 @@ fun SmbSourceEntity.toSmbConfig(): SmbConfig = SmbConfig(
  * Since the library can span several sources at once, contexts are cached per source id
  * rather than as a single global connection.
  */
+private const val WALK_CONCURRENCY = 8
+
 class SmbManager {
 
     private val contextCache = ConcurrentHashMap<String, CIFSContext>()
@@ -83,23 +91,48 @@ class SmbManager {
         f.exists() && f.isDirectory
     }
 
-    /** Recursively lists every file under a source's root (used by the scanner). */
+    /** Recursively lists every file under a source's root (used by the scanner). A library
+     * laid out as "one flat root folder containing thousands of movie subfolders" needs
+     * one SMB round-trip per subfolder just to see what's in it - doing those one at a time
+     * made large libraries take minutes just to finish listing, before any actual parsing
+     * even started. Bounded concurrency (walkSemaphore) hides that latency behind itself. */
     suspend fun listAllFilesRecursive(sourceId: String, config: SmbConfig): List<SmbFile> = withContext(Dispatchers.IO) {
         val ctx = contextFor(sourceId, config)
         val root = SmbFile(rootUrl(config), ctx)
-        val out = mutableListOf<SmbFile>()
-        walk(root, out)
-        out
+        // Deliberately NOT behind walk()'s try/catch: a failure listing the root itself
+        // (wrong share name, bad path, auth rejected, host unreachable...) must propagate
+        // so the scanner can report a real error - previously it was swallowed exactly like
+        // an empty folder would be, so a broken source and a genuinely empty share both
+        // silently produced "0 titles found" with no way to tell them apart.
+        val rootChildren = root.listFiles()
+            ?: throw java.io.IOException("Папка «${config.share}» недоступна или не существует")
+
+        val out = ConcurrentLinkedQueue<SmbFile>()
+        val walkSemaphore = Semaphore(WALK_CONCURRENCY)
+        coroutineScope {
+            rootChildren.map { child ->
+                async {
+                    if (child.isDirectory) walk(child, out, walkSemaphore) else out.add(child)
+                }
+            }.awaitAll()
+        }
+        out.toList()
     }
 
-    private fun walk(dir: SmbFile, out: MutableList<SmbFile>) {
-        val children = try { dir.listFiles() } catch (e: Exception) { return }
-        for (child in children ?: emptyArray()) {
-            if (child.isDirectory) {
-                walk(child, out)
-            } else {
-                out.add(child)
-            }
+    /** Only for subfolders below the root: one bad/unreadable folder deep in the tree
+     * shouldn't abort the whole scan, so failures here are still swallowed. */
+    private suspend fun walk(dir: SmbFile, out: ConcurrentLinkedQueue<SmbFile>, semaphore: Semaphore) {
+        val children = try { semaphore.withPermit { dir.listFiles() } } catch (e: Exception) { return }
+        coroutineScope {
+            (children ?: emptyArray()).map { child ->
+                async {
+                    if (child.isDirectory) {
+                        walk(child, out, semaphore)
+                    } else {
+                        out.add(child)
+                    }
+                }
+            }.awaitAll()
         }
     }
 

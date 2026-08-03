@@ -25,6 +25,12 @@
 -keepclassmembers class * extends com.google.crypto.tink.shaded.protobuf.GeneratedMessageLite {
     <fields>;
 }
+# jcifs-ng needs the real Bouncy Castle MD4 implementation for NTLM auth (Android's own
+# built-in "BC" provider is a stripped-down stand-in missing MD4 and others) - HomeCinemaApp
+# explicitly registers it ahead of Android's copy at startup, which only works if R8 hasn't
+# stripped/renamed its classes first.
+-keep class org.bouncycastle.** { *; }
+-keep class org.bouncycastle.jce.provider.BouncyCastleProvider
 -dontwarn org.bouncycastle.**
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**
