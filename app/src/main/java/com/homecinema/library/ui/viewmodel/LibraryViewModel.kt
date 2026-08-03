@@ -110,26 +110,7 @@ class LibraryViewModel : ViewModel() {
     val items: StateFlow<List<MediaItemEntity>> = combine(
         baseFilterState, _selectedGenre, _yearRange
     ) { base, genre, years ->
-        val types = base.filter.types
-        var result = if (types == null) base.items else base.items.filter { it.mediaType in types }
-        if (base.query.isNotBlank()) result = result.filter { item ->
-            item.title.contains(base.query, ignoreCase = true) ||
-                item.plot.contains(base.query, ignoreCase = true) ||
-                item.actors?.contains(base.query, ignoreCase = true) == true ||
-                item.director?.contains(base.query, ignoreCase = true) == true
-        }
-        if (base.collection != null) result = result.filter { it.collectionName == base.collection }
-        if (genre != null) result = result.filter { item ->
-            item.genres.split(",").map { it.trim() }.any { it.equals(genre, ignoreCase = true) }
-        }
-        if (years != null) result = result.filter { item -> item.year != null && item.year in years }
-        when (base.sortOrder) {
-            SortOrder.TITLE -> result.sortedBy { it.title }
-            SortOrder.YEAR -> result.sortedWith(compareByDescending<MediaItemEntity> { it.year ?: 0 }.thenBy { it.title })
-            SortOrder.GENRE -> result.sortedWith(
-                compareBy<MediaItemEntity> { it.genres.substringBefore(",").trim().ifBlank { "￿" } }.thenBy { it.title }
-            )
-        }
+        applyLibraryFilters(base.items, base.filter, base.query, base.sortOrder, base.collection, genre, years)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _scanProgress = MutableStateFlow<ScanProgress?>(null)

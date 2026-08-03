@@ -71,7 +71,7 @@ private fun audioOptionsFrom(tracks: Tracks): List<AudioTrackOption> =
     }
 
 /** Don't offer to resume something that's basically already finished - just start over. */
-private fun shouldResume(positionMs: Long, durationMs: Long): Boolean =
+internal fun shouldResume(positionMs: Long, durationMs: Long): Boolean =
     positionMs > 5_000L && (durationMs <= 0L || positionMs < durationMs * 0.95)
 
 @OptIn(UnstableApi::class)

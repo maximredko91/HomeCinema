@@ -14,6 +14,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -38,6 +39,11 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
         }
     }
 }
@@ -83,4 +89,19 @@ dependencies {
     // XML parsing for .nfo (kotlinx or plain XmlPullParser is fine - using built-in XmlPullParser, no extra dep needed)
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Unit tests (JVM, no device/emulator needed - ./gradlew test)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    // JVM XmlPullParser implementation - the Android platform provides one on-device,
+    // but plain unit tests run on the host JVM and need this for NfoParser's tests.
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
+
+    // Instrumented UI tests (need a device/emulator - ./gradlew connectedAndroidTest)
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

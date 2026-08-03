@@ -439,7 +439,7 @@ private fun ScrollJumpButtons(
     }
 }
 
-private fun filmsWord(count: Int): String {
+internal fun filmsWord(count: Int): String {
     val rem100 = count % 100
     val rem10 = count % 10
     return when {
