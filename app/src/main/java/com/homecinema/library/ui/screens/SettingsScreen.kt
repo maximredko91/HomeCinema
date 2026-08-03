@@ -587,13 +587,15 @@ private fun AboutSection() {
 
         AboutSubsection(title = "Возможности", icon = Icons.Default.Movie) {
             listOf(
-                "Автосканирование библиотеки по SMB с разбором .nfo (формат Kodi), несколько источников одновременно",
-                "Обложки и кадры фильмов, отдельные категории для фильмов/сериалов/мультфильмов/мультсериалов",
-                "Поиск (включая описание и актёров), фильтры по типу, жанру и году, сортировка, коллекции фильмов",
-                "Продолжение просмотра с прерванного места, отметка просмотренного",
+                "Несколько источников SMB одновременно, автообновление библиотеки при запуске",
+                "Автосканирование по .nfo (формат Kodi): обложки, кадры (fanart) с просмотром на весь экран, миниатюры серий",
+                "Категории (фильмы/сериалы/мультфильмы/мультсериалы) и коллекции по тегу <set>",
+                "Поиск по названию, описанию и актёрам; фильтры по жанру и году; сортировка; настраиваемое число колонок; алфавитный указатель",
+                "«Продолжить просмотр» с прерванного места и отметка просмотренного",
                 "Загрузка на устройство для просмотра офлайн",
-                "Встроенный плеер: субтитры, переключение аудиодорожек, жесты яркости/громкости, полноэкранный режим",
-                "Светлая, тёмная и OLED-темы с выбором акцентного цвета"
+                "Плеер: субтитры, переключение аудиодорожек, жесты яркости/громкости, полноэкранный режим",
+                "Темы: системная, светлая, тёмная, OLED и «Стекло» — с выбором акцентного цвета",
+                "Пароли SMB-источников хранятся зашифрованными (Android Keystore), не в открытом виде"
             ).forEach { BulletLine(it) }
         }
 
@@ -603,8 +605,9 @@ private fun AboutSection() {
                 "Media3 / ExoPlayer — воспроизведение видео",
                 "Room — локальный кэш библиотеки",
                 "Jetpack DataStore — настройки приложения",
+                "androidx.security-crypto — шифрование сохранённых паролей",
                 "Coil — загрузка изображений",
-                "jcifs-ng — клиент SMB2/3",
+                "jcifs-ng + Bouncy Castle — клиент SMB2/3 и NTLM-аутентификация",
                 "Kotlin Coroutines & Flow"
             ).forEach { BulletLine(it) }
         }
@@ -612,9 +615,10 @@ private fun AboutSection() {
         AboutSubsection(title = "Лицензии открытого кода", icon = Icons.Default.Description) {
             listOf(
                 "Kotlin, kotlinx.coroutines — Apache License 2.0",
-                "AndroidX (Compose, Navigation, Room, DataStore, Media3, Lifecycle) — Apache License 2.0",
+                "AndroidX (Compose, Navigation, Room, DataStore, Media3, Lifecycle, Security-Crypto) — Apache License 2.0",
                 "Coil — Apache License 2.0",
-                "jcifs-ng — GNU Lesser General Public License v2.1"
+                "jcifs-ng — GNU Lesser General Public License v2.1",
+                "Bouncy Castle — Bouncy Castle License (аналог MIT)"
             ).forEach { BulletLine(it) }
         }
     }
