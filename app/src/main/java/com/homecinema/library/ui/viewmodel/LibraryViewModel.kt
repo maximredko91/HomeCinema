@@ -188,4 +188,13 @@ class LibraryViewModel : ViewModel() {
     fun dismissProgress() {
         _scanProgress.value = null
     }
+
+    /** Removes an item from "Продолжить просмотр" by clearing its saved position - the
+     * dao query that backs [continueWatching] requires playbackPositionMs > 5000, so
+     * zeroing it out is enough to drop the item without a dedicated "hidden" flag. */
+    fun dismissContinueWatching(id: String) {
+        viewModelScope.launch {
+            app.repository.updatePlaybackProgress(id, 0, 0)
+        }
+    }
 }

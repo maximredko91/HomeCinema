@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -215,6 +217,7 @@ fun LibraryScreen(
                     onOpenSettings = onOpenSettings,
                     onSetQuery = viewModel::setQuery,
                     onPlayItem = onPlayItem,
+                    onDismissContinueWatching = viewModel::dismissContinueWatching,
                     onRescan = viewModel::rescan,
                     onDismissProgress = viewModel::dismissProgress
                 )
@@ -254,6 +257,7 @@ private fun LibraryGrid(
     onOpenSettings: () -> Unit,
     onSetQuery: (String) -> Unit,
     onPlayItem: (String) -> Unit,
+    onDismissContinueWatching: (String) -> Unit,
     onRescan: () -> Unit,
     onDismissProgress: () -> Unit
 ) {
@@ -273,7 +277,7 @@ private fun LibraryGrid(
 
     Column(Modifier.fillMaxSize()) {
         if (continueWatching.isNotEmpty()) {
-            ContinueWatchingRow(items = continueWatching, onClick = onPlayItem)
+            ContinueWatchingRow(items = continueWatching, onClick = onPlayItem, onDismiss = onDismissContinueWatching)
         }
 
         Row(Modifier.weight(1f)) {
@@ -318,10 +322,14 @@ private fun LibraryGrid(
                     )
                 }
 
+                // The scan banner floats at the same bottom edge and would otherwise sit
+                // right under these buttons - push them up above it while it's visible.
                 ScrollJumpButtons(
                     gridState = gridState,
                     itemCount = items.size,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = if (progress != null) 88.dp else 16.dp)
                 )
             }
 
@@ -338,7 +346,11 @@ private fun LibraryGrid(
 }
 
 @Composable
-private fun ContinueWatchingRow(items: List<MediaItemEntity>, onClick: (String) -> Unit) {
+private fun ContinueWatchingRow(
+    items: List<MediaItemEntity>,
+    onClick: (String) -> Unit,
+    onDismiss: (String) -> Unit
+) {
     Column(Modifier.padding(top = 12.dp, bottom = 8.dp)) {
         Text(
             "Продолжить просмотр",
@@ -351,14 +363,18 @@ private fun ContinueWatchingRow(items: List<MediaItemEntity>, onClick: (String) 
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items, key = { it.id }) { item ->
-                ContinueWatchingCard(item = item, onClick = { onClick(item.id) })
+                ContinueWatchingCard(
+                    item = item,
+                    onClick = { onClick(item.id) },
+                    onDismiss = { onDismiss(item.id) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ContinueWatchingCard(item: MediaItemEntity, onClick: () -> Unit) {
+private fun ContinueWatchingCard(item: MediaItemEntity, onClick: () -> Unit, onDismiss: () -> Unit) {
     val progressFraction = if (item.durationMs > 0) {
         (item.playbackPositionMs.toFloat() / item.durationMs).coerceIn(0f, 1f)
     } else 0f
@@ -389,6 +405,28 @@ private fun ContinueWatchingCard(item: MediaItemEntity, onClick: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(28.dp)
+                    .padding(2.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Clear,
+                        contentDescription = "Убрать из «Продолжить просмотр»",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
             LinearProgressIndicator(
                 progress = progressFraction,
@@ -631,6 +669,7 @@ private fun FiltersSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
