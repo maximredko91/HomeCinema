@@ -56,9 +56,10 @@ import com.homecinema.library.data.update.ReleaseNote
 import com.homecinema.library.data.update.UpdateChecker
 import com.homecinema.library.ui.theme.AccentColor
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
-import com.homecinema.library.ui.theme.glassBorderBrush
+import com.homecinema.library.ui.theme.ProvideGlassHazeState
+import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassContainerColor
-import com.homecinema.library.ui.theme.glassHighlightBrush
+import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -78,6 +79,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var clearingCache by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
 
+    ProvideGlassHazeState {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -87,16 +89,22 @@ fun SettingsScreen(onBack: () -> Unit) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
                     }
                 },
-                colors = homeCinemaTopAppBarColors()
+                colors = homeCinemaTopAppBarColors(),
+                modifier = Modifier.glassEffect()
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .glassBackdrop()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(
+                    top = padding.calculateTopPadding() + 16.dp,
+                    bottom = padding.calculateBottomPadding() + 16.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SourcesSection()
@@ -242,6 +250,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             ChangelogSection()
             AboutSection()
         }
+    }
     }
 }
 
@@ -492,13 +501,7 @@ private fun SettingsSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (isGlass) {
-                    Modifier
-                        .background(glassHighlightBrush, MaterialTheme.shapes.medium)
-                        .border(1.dp, glassBorderBrush, MaterialTheme.shapes.medium)
-                } else Modifier
-            ),
+            .glassEffect(shape = MaterialTheme.shapes.medium),
         colors = CardDefaults.cardColors(containerColor = glassContainerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isGlass) 0.dp else 1.dp)
     ) {

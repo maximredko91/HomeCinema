@@ -20,10 +20,10 @@ val OledSurfaceVariant = Color(0xFF161616)
 // paint the system status/navigation bars with this exact same color.
 val LightBackground = Color(0xFFFFFBFE)
 
-// "Стекло" theme: a deep, slightly cool base so translucent chrome panels (top bars,
-// sheets, cards) read clearly against it - real backdrop blur isn't available without a
-// third-party library, so the glass look comes from translucency + a specular highlight
-// gradient + a thin light-catching border instead (see GlassStyle.kt).
+// "Стекло" theme: a deep, slightly cool base so blurred-glass chrome panels (top bars,
+// sheets, cards) read clearly against it. GlassSurface is the tint color handed to Haze's
+// real backdrop blur (see GlassStyle.kt) rather than a hand-picked translucency alpha -
+// Haze's material presets work out their own appropriate opacity on top of it.
 val GlassBackground = Color(0xFF121022)
 val GlassSurface = Color(0xFF1C1930)
 val GlassSurfaceVariant = Color(0xFF272240)

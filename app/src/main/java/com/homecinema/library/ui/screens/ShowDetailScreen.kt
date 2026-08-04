@@ -25,6 +25,9 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.ui.components.DownloadControlRow
 import com.homecinema.library.ui.components.ZoomableImageDialog
+import com.homecinema.library.ui.theme.ProvideGlassHazeState
+import com.homecinema.library.ui.theme.glassBackdrop
+import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 
@@ -46,6 +49,7 @@ fun ShowDetailScreen(
 
     val bySeason = episodes.groupBy { it.season ?: 1 }.toSortedMap()
 
+    ProvideGlassHazeState {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -55,20 +59,29 @@ fun ShowDetailScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
                     }
                 },
-                colors = homeCinemaTopAppBarColors()
+                colors = homeCinemaTopAppBarColors(),
+                modifier = Modifier.glassEffect()
             )
         }
     ) { padding ->
         if (episodes.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize().glassBackdrop().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
                 Text("Серии не найдены — попробуйте пересканировать библиотеку")
             }
             return@Scaffold
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp)
+            modifier = Modifier.fillMaxSize().glassBackdrop(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = padding.calculateBottomPadding() + 16.dp,
+                top = padding.calculateTopPadding() + 16.dp
+            )
         ) {
             show?.let { current ->
                 item { ShowHeader(current, onImageClick = { path -> zoomedImage = path }) }
@@ -99,6 +112,7 @@ fun ShowDetailScreen(
 
     zoomedImage?.let { path ->
         ZoomableImageDialog(imagePath = path, onDismiss = { zoomedImage = null })
+    }
     }
 }
 

@@ -21,10 +21,10 @@ android {
 
     defaultConfig {
         applicationId = "com.homecinema.library"
-        minSdk = 26
+        minSdk = 31
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -83,6 +83,12 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    // Real backdrop blur for the "Стекло" theme (minSdk 31 specifically to support this
+    // unconditionally - Haze itself falls back to a flat scrim below API 31, same as what
+    // this app used to fake by hand, so there's no point in supporting that split)
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
+    implementation("dev.chrisbanes.haze:haze-materials:1.7.2")
 
     // Media3 / ExoPlayer
     implementation("androidx.media3:media3-exoplayer:1.4.0")

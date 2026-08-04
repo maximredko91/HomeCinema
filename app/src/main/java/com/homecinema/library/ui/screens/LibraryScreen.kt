@@ -71,7 +71,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Add
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
 import com.homecinema.library.ui.theme.glassContainerColor
+import com.homecinema.library.ui.theme.glassBackdrop
+import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
+import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -132,10 +135,16 @@ fun LibraryScreen(
     }
 
     val showSearchAndFilters = libraryTab == LibraryTab.ALL || selectedCollection != null || selectedListId != null
+    // Same branch this drives in the `when` below - the update/continue-watching banners
+    // only ever showed inside LibraryGrid, never above CollectionsGrid/ListsGrid.
+    val showingLibraryGrid = !(libraryTab == LibraryTab.COLLECTIONS && selectedCollection == null) &&
+        !(libraryTab == LibraryTab.LISTS && selectedListId == null)
     val filtersActive = filter != LibraryFilter.ALL || selectedGenre != null || yearRange != null
 
+    ProvideGlassHazeState {
     Scaffold(
         topBar = {
+            Column(Modifier.glassEffect()) {
             TopAppBar(
                 title = {
                     if (searchActive) {
@@ -229,9 +238,6 @@ fun LibraryScreen(
                 },
                 colors = homeCinemaTopAppBarColors()
             )
-        }
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
             if (searchActive && filtersActive) {
                 ActiveFilterDuringSearchBanner(
                     filterLabel = describeActiveFilters(filter, selectedGenre, yearRange),
@@ -261,7 +267,25 @@ fun LibraryScreen(
                     )
                 }
             }
-
+            // Hoisted up from LibraryGrid so they're part of the same fixed/pinned header
+            // as the top bar and tab row (rather than a normal Column sibling above the
+            // grid) - that's what lets the grid's own bounds extend behind this whole
+            // header for the blur to sample real, moving content instead of a static tint.
+            if (showingLibraryGrid) {
+                availableUpdate?.let { release ->
+                    UpdateAvailableBanner(
+                        release = release,
+                        onDismiss = { viewModel.dismissUpdate(release.version) }
+                    )
+                }
+                if (selectedCollection == null && continueWatching.isNotEmpty()) {
+                    ContinueWatchingRow(items = continueWatching, onClick = onPlayItem, onDismiss = viewModel::dismissContinueWatching)
+                }
+            }
+            }
+        }
+    ) { padding ->
+        Box(Modifier.fillMaxSize().glassBackdrop()) {
             when {
                 libraryTab == LibraryTab.COLLECTIONS && selectedCollection == null -> CollectionsGrid(
                     configured = configured,
@@ -269,7 +293,8 @@ fun LibraryScreen(
                     gridColumns = gridColumns,
                     gridState = collectionsGridState,
                     onOpenSettings = onOpenSettings,
-                    onSelectCollection = viewModel::selectCollection
+                    onSelectCollection = viewModel::selectCollection,
+                    topContentPadding = padding.calculateTopPadding()
                 )
                 libraryTab == LibraryTab.LISTS && selectedListId == null -> ListsGrid(
                     customLists = customLists,
@@ -280,7 +305,8 @@ fun LibraryScreen(
                     onSelectList = viewModel::selectList,
                     onCreateList = viewModel::createList,
                     onRenameList = viewModel::renameList,
-                    onDeleteList = viewModel::deleteList
+                    onDeleteList = viewModel::deleteList,
+                    topContentPadding = padding.calculateTopPadding()
                 )
                 else -> LibraryGrid(
                     configured = configured,
@@ -291,16 +317,12 @@ fun LibraryScreen(
                     sortOrder = sortOrder,
                     alphabetIndexEnabled = alphabetIndexEnabled,
                     gridColumns = gridColumns,
-                    continueWatching = if (selectedCollection == null) continueWatching else emptyList(),
                     onOpenDetail = onOpenDetail,
                     onOpenSettings = onOpenSettings,
                     onSetQuery = viewModel::setQuery,
-                    onPlayItem = onPlayItem,
-                    onDismissContinueWatching = viewModel::dismissContinueWatching,
                     onRescan = viewModel::rescan,
                     onDismissProgress = viewModel::dismissProgress,
-                    availableUpdate = availableUpdate,
-                    onDismissUpdate = viewModel::dismissUpdate
+                    topContentPadding = padding.calculateTopPadding()
                 )
             }
         }
@@ -322,6 +344,7 @@ fun LibraryScreen(
             onDismiss = { filtersSheetOpen = false }
         )
     }
+    }
 }
 
 @Composable
@@ -334,16 +357,12 @@ private fun LibraryGrid(
     sortOrder: SortOrder,
     alphabetIndexEnabled: Boolean,
     gridColumns: Int,
-    continueWatching: List<MediaItemEntity>,
     onOpenDetail: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onSetQuery: (String) -> Unit,
-    onPlayItem: (String) -> Unit,
-    onDismissContinueWatching: (String) -> Unit,
     onRescan: () -> Unit,
     onDismissProgress: () -> Unit,
-    availableUpdate: ReleaseInfo?,
-    onDismissUpdate: (String) -> Unit
+    topContentPadding: androidx.compose.ui.unit.Dp
 ) {
     val scope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
@@ -359,42 +378,37 @@ private fun LibraryGrid(
     }
     val showAlphabetBar = alphabetIndexEnabled && letterIndex.size > 1
 
-    Column(Modifier.fillMaxSize()) {
-        availableUpdate?.let { release ->
-            UpdateAvailableBanner(
-                release = release,
-                onDismiss = { onDismissUpdate(release.version) }
-            )
-        }
-        if (continueWatching.isNotEmpty()) {
-            ContinueWatchingRow(items = continueWatching, onClick = onPlayItem, onDismiss = onDismissContinueWatching)
-        }
-
-        Row(Modifier.weight(1f)) {
+    Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 when {
-                    !configured -> EmptyState(
-                        title = "Подключение не настроено",
-                        subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
-                        actionLabel = "Открыть настройки",
-                        onAction = onOpenSettings
-                    )
-                    items.isEmpty() && progress == null && query.isNotBlank() -> EmptyState(
-                        title = "Ничего не найдено",
-                        subtitle = "По запросу «$query» ничего не нашлось. Попробуйте изменить фильтр или поисковый запрос.",
-                        actionLabel = "Очистить поиск",
-                        onAction = { onSetQuery("") }
-                    )
-                    items.isEmpty() && progress == null -> EmptyState(
-                        title = if (filter == LibraryFilter.ALL) "Библиотека пуста" else "Ничего не найдено в этой категории",
-                        subtitle = "Нажмите на значок обновления вверху, чтобы просканировать диск и найти фильмы, сериалы и мультфильмы по .nfo файлам.",
-                        actionLabel = "Сканировать сейчас",
-                        onAction = onRescan
-                    )
+                    !configured -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
+                        EmptyState(
+                            title = "Подключение не настроено",
+                            subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
+                            actionLabel = "Открыть настройки",
+                            onAction = onOpenSettings
+                        )
+                    }
+                    items.isEmpty() && progress == null && query.isNotBlank() -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
+                        EmptyState(
+                            title = "Ничего не найдено",
+                            subtitle = "По запросу «$query» ничего не нашлось. Попробуйте изменить фильтр или поисковый запрос.",
+                            actionLabel = "Очистить поиск",
+                            onAction = { onSetQuery("") }
+                        )
+                    }
+                    items.isEmpty() && progress == null -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
+                        EmptyState(
+                            title = if (filter == LibraryFilter.ALL) "Библиотека пуста" else "Ничего не найдено в этой категории",
+                            subtitle = "Нажмите на значок обновления вверху, чтобы просканировать диск и найти фильмы, сериалы и мультфильмы по .nfo файлам.",
+                            actionLabel = "Сканировать сейчас",
+                            onAction = onRescan
+                        )
+                    }
                     else -> LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Fixed(gridColumns),
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -431,7 +445,6 @@ private fun LibraryGrid(
                     }
                 )
             }
-        }
     }
 }
 
@@ -542,26 +555,31 @@ private fun CollectionsGrid(
     gridColumns: Int,
     gridState: LazyGridState,
     onOpenSettings: () -> Unit,
-    onSelectCollection: (String) -> Unit
+    onSelectCollection: (String) -> Unit,
+    topContentPadding: androidx.compose.ui.unit.Dp
 ) {
     when {
-        !configured -> EmptyState(
-            title = "Подключение не настроено",
-            subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
-            actionLabel = "Открыть настройки",
-            onAction = onOpenSettings
-        )
-        collections.isEmpty() -> EmptyState(
-            title = "Коллекций не найдено",
-            subtitle = "Коллекции определяются по тегу <set> в .nfo файлах (например, наборы фильмов из Kodi/Radarr).",
-            actionLabel = "Открыть настройки",
-            onAction = onOpenSettings
-        )
+        !configured -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
+            EmptyState(
+                title = "Подключение не настроено",
+                subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
+                actionLabel = "Открыть настройки",
+                onAction = onOpenSettings
+            )
+        }
+        collections.isEmpty() -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
+            EmptyState(
+                title = "Коллекций не найдено",
+                subtitle = "Коллекции определяются по тегу <set> в .nfo файлах (например, наборы фильмов из Kodi/Radarr).",
+                actionLabel = "Открыть настройки",
+                onAction = onOpenSettings
+            )
+        }
         else -> Box(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(gridColumns),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
@@ -592,7 +610,8 @@ private fun ListsGrid(
     onSelectList: (String) -> Unit,
     onCreateList: (String) -> Unit,
     onRenameList: (String, String) -> Unit,
-    onDeleteList: (String) -> Unit
+    onDeleteList: (String) -> Unit,
+    topContentPadding: androidx.compose.ui.unit.Dp
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var listToRename by remember { mutableStateOf<CustomListEntity?>(null) }
@@ -602,7 +621,7 @@ private fun ListsGrid(
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(gridColumns),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize()
@@ -846,12 +865,14 @@ private fun ScrollJumpButtons(
     val canScrollDown = gridState.canScrollForward
     if (!canScrollUp && !canScrollDown) return
     val isGlass = LocalIsGlassTheme.current
+    val fabShape = MaterialTheme.shapes.small
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (canScrollUp) {
             SmallFloatingActionButton(
                 onClick = { scope.launch { gridState.animateScrollToItem(0) } },
-                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor
+                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor,
+                modifier = Modifier.glassEffect(shape = fabShape)
             ) {
                 Icon(Icons.Default.KeyboardArrowUp, contentDescription = "В начало списка")
             }
@@ -859,7 +880,8 @@ private fun ScrollJumpButtons(
         if (canScrollDown) {
             SmallFloatingActionButton(
                 onClick = { scope.launch { gridState.animateScrollToItem((itemCount - 1).coerceAtLeast(0)) } },
-                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor
+                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor,
+                modifier = Modifier.glassEffect(shape = fabShape)
             ) {
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "В конец списка")
             }
@@ -975,7 +997,12 @@ private fun FiltersSheet(
         )
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = glassContainerColor) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = glassContainerColor,
+        modifier = Modifier.glassEffect(shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

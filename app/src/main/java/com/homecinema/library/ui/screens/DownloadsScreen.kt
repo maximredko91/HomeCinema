@@ -13,6 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.ui.theme.ProvideGlassHazeState
+import com.homecinema.library.ui.theme.glassBackdrop
+import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 
@@ -26,6 +29,7 @@ fun DownloadsScreen(
     val scope = rememberCoroutineScope()
     val downloaded by app.repository.observeDownloaded().collectAsState(initial = emptyList())
 
+    ProvideGlassHazeState {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -35,12 +39,16 @@ fun DownloadsScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
                     }
                 },
-                colors = homeCinemaTopAppBarColors()
+                colors = homeCinemaTopAppBarColors(),
+                modifier = Modifier.glassEffect()
             )
         }
     ) { padding ->
         if (downloaded.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize().glassBackdrop().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     "Пока ничего не скачано.\nСкачанные фильмы, мультфильмы и серии можно смотреть без сети.",
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -51,8 +59,13 @@ fun DownloadsScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp)
+            modifier = Modifier.fillMaxSize().glassBackdrop(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = padding.calculateBottomPadding() + 16.dp,
+                top = padding.calculateTopPadding() + 16.dp
+            )
         ) {
             items(downloaded, key = { it.id }) { item ->
                 Row(
@@ -83,5 +96,6 @@ fun DownloadsScreen(
                 HorizontalDivider()
             }
         }
+    }
     }
 }

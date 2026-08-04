@@ -38,7 +38,10 @@ import com.homecinema.library.data.streaming.mimeTypeForExtension
 import com.homecinema.library.ui.components.DownloadControlRow
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.components.ZoomableImageDialog
+import com.homecinema.library.ui.theme.ProvideGlassHazeState
+import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassContainerColor
+import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 import java.io.File
@@ -65,6 +68,7 @@ fun DetailScreen(
     var zoomedImage by remember { mutableStateOf<String?>(null) }
     var addToListSheetOpen by remember { mutableStateOf(false) }
 
+    ProvideGlassHazeState {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -87,7 +91,8 @@ fun DetailScreen(
                         }
                     }
                 },
-                colors = homeCinemaTopAppBarColors()
+                colors = homeCinemaTopAppBarColors(),
+                modifier = Modifier.glassEffect()
             )
         }
     ) { padding ->
@@ -97,8 +102,9 @@ fun DetailScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .glassBackdrop()
                 .verticalScroll(rememberScrollState())
+                .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
         ) {
             if (current.fanartLocalPath != null) {
                 AsyncImage(
@@ -263,6 +269,7 @@ fun DetailScreen(
             onDismiss = { addToListSheetOpen = false }
         )
     }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -277,7 +284,12 @@ private fun AddToListSheet(
     val sheetState = rememberModalBottomSheetState()
     var newListName by remember { mutableStateOf("") }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = glassContainerColor) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = glassContainerColor,
+        modifier = Modifier.glassEffect(shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+    ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             Text("Добавить в список", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(12.dp))
