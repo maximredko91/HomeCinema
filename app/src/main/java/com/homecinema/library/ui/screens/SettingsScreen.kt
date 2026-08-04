@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Palette
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,6 +52,8 @@ import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.settings.SmbConfig
 import com.homecinema.library.data.settings.ThemeMode
 import com.homecinema.library.data.smb.toSmbUserMessage
+import com.homecinema.library.data.update.ReleaseNote
+import com.homecinema.library.data.update.UpdateChecker
 import com.homecinema.library.ui.theme.AccentColor
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
 import com.homecinema.library.ui.theme.glassBorderBrush
@@ -235,6 +239,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            ChangelogSection()
             AboutSection()
         }
     }
@@ -564,6 +569,42 @@ private fun AccentSwatch(accent: AccentColor, selected: Boolean, onClick: () -> 
                 tint = if (accent.color.luminance() > 0.5f) Color.Black else Color.White,
                 modifier = Modifier.size(18.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun ChangelogSection() {
+    var releases by remember { mutableStateOf<List<ReleaseNote>?>(null) }
+    LaunchedEffect(Unit) {
+        releases = UpdateChecker.fetchAllReleases()
+    }
+
+    SettingsSection(title = "История изменений", icon = Icons.Default.History, expandable = true, initiallyExpanded = false) {
+        when {
+            releases == null -> Text(
+                "Загрузка...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            releases!!.isEmpty() -> Text(
+                "Не удалось загрузить историю изменений — проверьте подключение к интернету.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            else -> releases!!.forEachIndexed { index, release ->
+                if (index > 0) {
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(16.dp))
+                }
+                Text(
+                    "v${release.version}",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(release.body, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }

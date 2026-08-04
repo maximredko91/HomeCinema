@@ -76,7 +76,7 @@ class HomeCinemaApp : Application() {
         database = AppDatabase.build(this)
         val credentialStore = CredentialStore(this)
         sourceResolver = SmbSourceResolver(database.smbSourceDao(), credentialStore)
-        repository = LibraryRepository(database.libraryDao(), database.smbSourceDao(), smbManager, credentialStore, this)
+        repository = LibraryRepository(database.libraryDao(), database.smbSourceDao(), smbManager, credentialStore, this, database.listDao())
         downloadManager = DownloadManager(database.libraryDao(), this, applicationScope)
 
         createDownloadNotificationChannel()

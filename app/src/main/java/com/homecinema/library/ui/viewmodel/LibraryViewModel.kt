@@ -3,17 +3,26 @@ package com.homecinema.library.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.scanner.ScanProgress
 import com.homecinema.library.data.update.ReleaseInfo
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/** Sentinel id for the pinned "Избранное" entry on the Списки tab - favorites is a plain
+ * boolean column on media_items, not a row in custom_lists, but reuses the exact same
+ * selection/filtering path as a real list (see [LibraryViewModel.listMemberIds]). */
+const val FAVORITES_LIST_ID = "__favorites__"
 
 /** UI filter for the library grid - "null" means "show everything". */
 enum class LibraryFilter(val types: Set<MediaType>?) {
@@ -31,7 +40,7 @@ enum class SortOrder(val label: String) {
     RATING("По рейтингу")
 }
 
-enum class LibraryTab { ALL, COLLECTIONS }
+enum class LibraryTab { ALL, COLLECTIONS, LISTS }
 
 data class CollectionSummary(
     val name: String,
@@ -102,6 +111,32 @@ class LibraryViewModel : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    // --- User-created lists + favorites, for the Списки tab ---
+
+    val customLists: StateFlow<List<CustomListEntity>> = app.repository.observeLists()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val listCounts: StateFlow<Map<String, Int>> = app.repository.observeListCounts()
+        .map { rows -> rows.associate { it.listId to it.cnt } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val favoritesCount: StateFlow<Int> = allItems.map { items -> items.count { it.isFavorite } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    private val _selectedListId = MutableStateFlow<String?>(null)
+    val selectedListId: StateFlow<String?> = _selectedListId
+
+    /** ids currently belonging to the selected list/Избранное, or null when nothing is
+     * selected - fed straight into applyLibraryFilters the same way selectedCollection is. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val listMemberIds: StateFlow<Set<String>?> = _selectedListId.flatMapLatest { id ->
+        when (id) {
+            null -> flowOf(null)
+            FAVORITES_LIST_ID -> app.repository.observeFavorites().map { items -> items.map { it.id }.toSet() }
+            else -> app.repository.observeItemsInList(id).map { items -> items.map { it.id }.toSet() }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private data class BaseFilterState(
         val items: List<MediaItemEntity>,
         val filter: LibraryFilter,
@@ -115,9 +150,9 @@ class LibraryViewModel : ViewModel() {
     ) { items, filter, query, sort, collection -> BaseFilterState(items, filter, query, sort, collection) }
 
     val items: StateFlow<List<MediaItemEntity>> = combine(
-        baseFilterState, _selectedGenre, _yearRange
-    ) { base, genre, years ->
-        applyLibraryFilters(base.items, base.filter, base.query, base.sortOrder, base.collection, genre, years)
+        baseFilterState, _selectedGenre, _yearRange, listMemberIds
+    ) { base, genre, years, memberIds ->
+        applyLibraryFilters(base.items, base.filter, base.query, base.sortOrder, base.collection, genre, years, memberIds)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _scanProgress = MutableStateFlow<ScanProgress?>(null)
@@ -156,6 +191,7 @@ class LibraryViewModel : ViewModel() {
     fun setLibraryTab(tab: LibraryTab) {
         _libraryTab.value = tab
         if (tab == LibraryTab.ALL) _selectedCollection.value = null
+        if (tab != LibraryTab.LISTS) _selectedListId.value = null
     }
 
     fun selectCollection(name: String) {
@@ -164,6 +200,41 @@ class LibraryViewModel : ViewModel() {
 
     fun clearCollectionSelection() {
         _selectedCollection.value = null
+    }
+
+    fun selectList(id: String) {
+        _selectedListId.value = id
+    }
+
+    fun clearListSelection() {
+        _selectedListId.value = null
+    }
+
+    fun createList(name: String) {
+        viewModelScope.launch { app.repository.createList(name) }
+    }
+
+    fun renameList(id: String, name: String) {
+        viewModelScope.launch { app.repository.renameList(id, name) }
+    }
+
+    fun deleteList(id: String) {
+        viewModelScope.launch {
+            app.repository.deleteList(id)
+            if (_selectedListId.value == id) _selectedListId.value = null
+        }
+    }
+
+    fun addItemToList(listId: String, itemId: String) {
+        viewModelScope.launch { app.repository.addItemToList(listId, itemId) }
+    }
+
+    fun removeItemFromList(listId: String, itemId: String) {
+        viewModelScope.launch { app.repository.removeItemFromList(listId, itemId) }
+    }
+
+    fun toggleFavorite(itemId: String, current: Boolean) {
+        viewModelScope.launch { app.repository.setFavorite(itemId, !current) }
     }
 
     fun setGenre(genre: String?) {

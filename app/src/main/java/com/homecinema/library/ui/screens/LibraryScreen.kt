@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -50,15 +51,24 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.homecinema.library.R
+import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.scanner.ScanProgress
 import com.homecinema.library.data.update.ReleaseInfo
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.viewmodel.CollectionSummary
+import com.homecinema.library.ui.viewmodel.FAVORITES_LIST_ID
 import com.homecinema.library.ui.viewmodel.LibraryFilter
 import com.homecinema.library.ui.viewmodel.LibraryTab
 import com.homecinema.library.ui.viewmodel.LibraryViewModel
 import com.homecinema.library.ui.viewmodel.SortOrder
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Add
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
 import com.homecinema.library.ui.theme.glassContainerColor
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
@@ -92,6 +102,10 @@ fun LibraryScreen(
     val continueWatching by viewModel.continueWatching.collectAsState()
     val availableUpdate by viewModel.availableUpdate.collectAsState()
     val categoryCounts by viewModel.categoryCounts.collectAsState()
+    val customLists by viewModel.customLists.collectAsState()
+    val listCounts by viewModel.listCounts.collectAsState()
+    val favoritesCount by viewModel.favoritesCount.collectAsState()
+    val selectedListId by viewModel.selectedListId.collectAsState()
 
     var searchActive by remember { mutableStateOf(false) }
     var filtersSheetOpen by remember { mutableStateOf(false) }
@@ -102,15 +116,22 @@ fun LibraryScreen(
     // CollectionsGrid would reset every time that composable unmounts/remounts.
     val collectionsGridState = rememberLazyGridState()
 
-    // Closing search takes priority over leaving a collection when both are active - it's
-    // the more local, more recently opened piece of state.
+    val selectedListName = when (selectedListId) {
+        null -> null
+        FAVORITES_LIST_ID -> "Избранное"
+        else -> customLists.firstOrNull { it.id == selectedListId }?.name
+    }
+
+    // Closing search takes priority over leaving a collection/list when both are active -
+    // it's the more local, more recently opened piece of state.
     BackHandler(enabled = selectedCollection != null) { viewModel.clearCollectionSelection() }
+    BackHandler(enabled = selectedListId != null) { viewModel.clearListSelection() }
     BackHandler(enabled = searchActive) {
         searchActive = false
         viewModel.setQuery("")
     }
 
-    val showSearchAndFilters = libraryTab == LibraryTab.ALL || selectedCollection != null
+    val showSearchAndFilters = libraryTab == LibraryTab.ALL || selectedCollection != null || selectedListId != null
     val filtersActive = filter != LibraryFilter.ALL || selectedGenre != null || yearRange != null
 
     Scaffold(
@@ -140,6 +161,12 @@ fun LibraryScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                    } else if (libraryTab == LibraryTab.LISTS && selectedListName != null) {
+                        Text(
+                            text = selectedListName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     } else {
                         Image(
                             painter = painterResource(R.drawable.ic_app_logo),
@@ -164,6 +191,10 @@ fun LibraryScreen(
                     } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
                         IconButton(onClick = { viewModel.clearCollectionSelection() }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "К списку коллекций")
+                        }
+                    } else if (libraryTab == LibraryTab.LISTS && selectedListId != null) {
+                        IconButton(onClick = { viewModel.clearListSelection() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "К списку списков")
                         }
                     }
                 },
@@ -223,6 +254,11 @@ fun LibraryScreen(
                         onClick = { viewModel.setLibraryTab(LibraryTab.COLLECTIONS) },
                         text = { Text("Коллекции") }
                     )
+                    Tab(
+                        selected = libraryTab == LibraryTab.LISTS,
+                        onClick = { viewModel.setLibraryTab(LibraryTab.LISTS) },
+                        text = { Text("Списки") }
+                    )
                 }
             }
 
@@ -234,6 +270,17 @@ fun LibraryScreen(
                     gridState = collectionsGridState,
                     onOpenSettings = onOpenSettings,
                     onSelectCollection = viewModel::selectCollection
+                )
+                libraryTab == LibraryTab.LISTS && selectedListId == null -> ListsGrid(
+                    customLists = customLists,
+                    listCounts = listCounts,
+                    favoritesCount = favoritesCount,
+                    gridColumns = gridColumns,
+                    gridState = collectionsGridState,
+                    onSelectList = viewModel::selectList,
+                    onCreateList = viewModel::createList,
+                    onRenameList = viewModel::renameList,
+                    onDeleteList = viewModel::deleteList
                 )
                 else -> LibraryGrid(
                     configured = configured,
@@ -531,6 +578,225 @@ private fun CollectionsGrid(
             )
         }
     }
+}
+
+/** User-created lists (like playlists) plus the pinned "Избранное" entry - separate from
+ * the NFO-derived, read-only Коллекции above. */
+@Composable
+private fun ListsGrid(
+    customLists: List<CustomListEntity>,
+    listCounts: Map<String, Int>,
+    favoritesCount: Int,
+    gridColumns: Int,
+    gridState: LazyGridState,
+    onSelectList: (String) -> Unit,
+    onCreateList: (String) -> Unit,
+    onRenameList: (String, String) -> Unit,
+    onDeleteList: (String) -> Unit
+) {
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var listToRename by remember { mutableStateOf<CustomListEntity?>(null) }
+    var listToDelete by remember { mutableStateOf<CustomListEntity?>(null) }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Fixed(gridColumns),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            item(key = FAVORITES_LIST_ID) {
+                ListCard(
+                    title = "Избранное",
+                    count = favoritesCount,
+                    icon = Icons.Default.Favorite,
+                    onClick = { onSelectList(FAVORITES_LIST_ID) }
+                )
+            }
+            items(customLists, key = { it.id }) { list ->
+                ListCard(
+                    title = list.name,
+                    count = listCounts[list.id] ?: 0,
+                    icon = Icons.Default.Bookmark,
+                    onClick = { onSelectList(list.id) },
+                    onRename = { listToRename = list },
+                    onDelete = { listToDelete = list }
+                )
+            }
+            item(key = "__create_list__") {
+                CreateListCard(onClick = { showCreateDialog = true })
+            }
+        }
+
+        ScrollJumpButtons(
+            gridState = gridState,
+            itemCount = customLists.size + 2,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+        )
+    }
+
+    if (showCreateDialog) {
+        ListNameDialog(
+            title = "Новый список",
+            initialName = "",
+            confirmLabel = "Создать",
+            onConfirm = { name -> onCreateList(name) },
+            onDismiss = { showCreateDialog = false }
+        )
+    }
+
+    listToRename?.let { list ->
+        ListNameDialog(
+            title = "Переименовать список",
+            initialName = list.name,
+            confirmLabel = "Сохранить",
+            onConfirm = { name -> onRenameList(list.id, name) },
+            onDismiss = { listToRename = null }
+        )
+    }
+
+    listToDelete?.let { list ->
+        AlertDialog(
+            onDismissRequest = { listToDelete = null },
+            title = { Text("Удалить список «${list.name}»?") },
+            text = { Text("Фильмы из библиотеки не пропадут, удалится только сам список.") },
+            confirmButton = {
+                TextButton(onClick = { onDeleteList(list.id); listToDelete = null }) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { listToDelete = null }) { Text("Отмена") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ListCard(
+    title: String,
+    count: Int,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    onRename: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+            if (onRename != null || onDelete != null) {
+                Box(Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Действия со списком", tint = Color.White)
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        onRename?.let { rename ->
+                            DropdownMenuItem(
+                                text = { Text("Переименовать") },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                onClick = { menuOpen = false; rename() }
+                            )
+                        }
+                        onDelete?.let { delete ->
+                            DropdownMenuItem(
+                                text = { Text("Удалить") },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                onClick = { menuOpen = false; delete() }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "$count ${filmsWord(count)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+        )
+    }
+}
+
+@Composable
+private fun CreateListCard(onClick: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Создать список",
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Создать список",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+    }
+}
+
+@Composable
+private fun ListNameDialog(
+    title: String,
+    initialName: String,
+    confirmLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(initialName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                label = { Text("Название") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onConfirm(name.trim()); onDismiss() }
+            ) { Text(confirmLabel) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        }
+    )
 }
 
 @Composable

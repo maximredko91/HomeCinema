@@ -14,7 +14,8 @@ fun applyLibraryFilters(
     sortOrder: SortOrder,
     collection: String? = null,
     genre: String? = null,
-    yearRange: IntRange? = null
+    yearRange: IntRange? = null,
+    listMemberIds: Set<String>? = null
 ): List<MediaItemEntity> {
     val types = filter.types
     var result = if (types == null) items else items.filter { it.mediaType in types }
@@ -40,6 +41,10 @@ fun applyLibraryFilters(
 
     if (collection != null) {
         result = result.filter { it.collectionName == collection }
+    }
+
+    if (listMemberIds != null) {
+        result = result.filter { it.id in listMemberIds }
     }
 
     if (genre != null) {

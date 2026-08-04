@@ -185,4 +185,34 @@ class LibraryFilteringTest {
         val result = applyLibraryFilters(itemsWithPirates, LibraryFilter.ALL, "сокровища", SortOrder.TITLE)
         assertEquals(listOf(pirates), result)
     }
+
+    @Test
+    fun `listMemberIds restricts to only those ids, same as a collection selection`() {
+        val result = applyLibraryFilters(
+            allItems, LibraryFilter.ALL, "", SortOrder.TITLE,
+            listMemberIds = setOf(bond2006.id, interstellar.id)
+        )
+        assertEquals(setOf(bond2006, interstellar), result.toSet())
+    }
+
+    @Test
+    fun `null listMemberIds means no list is selected, so nothing is excluded by it`() {
+        val result = applyLibraryFilters(allItems, LibraryFilter.ALL, "", SortOrder.TITLE, listMemberIds = null)
+        assertEquals(4, result.size)
+    }
+
+    @Test
+    fun `empty listMemberIds means the selected list has no members, so everything is excluded`() {
+        val result = applyLibraryFilters(allItems, LibraryFilter.ALL, "", SortOrder.TITLE, listMemberIds = emptySet())
+        assertEquals(emptyList<MediaItemEntity>(), result)
+    }
+
+    @Test
+    fun `listMemberIds combines with a text search, same as collection does`() {
+        val result = applyLibraryFilters(
+            allItems, LibraryFilter.ALL, "007", SortOrder.TITLE,
+            listMemberIds = setOf(bond2006.id, interstellar.id)
+        )
+        assertEquals(listOf(bond2006), result)
+    }
 }

@@ -1,7 +1,11 @@
 package com.homecinema.library.data.repository
 
 import android.content.Context
+import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.LibraryDao
+import com.homecinema.library.data.db.ListCountRow
+import com.homecinema.library.data.db.ListDao
+import com.homecinema.library.data.db.ListItemCrossRef
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.SmbSourceDao
 import com.homecinema.library.data.db.SmbSourceEntity
@@ -23,12 +27,46 @@ class LibraryRepository(
     private val sourceDao: SmbSourceDao,
     private val smbManager: SmbManager,
     private val credentialStore: CredentialStore,
-    private val context: Context
+    private val context: Context,
+    private val listDao: ListDao
 ) {
     private val sourceResolver = SmbSourceResolver(sourceDao, credentialStore)
     private val scanner = LibraryScanner(smbManager, dao, sourceDao, sourceResolver, context)
 
     fun observeLibrary(): Flow<List<MediaItemEntity>> = dao.observeLibrary()
+
+    // --- Favorites ---
+
+    fun observeFavorites(): Flow<List<MediaItemEntity>> = dao.observeFavorites()
+
+    suspend fun setFavorite(id: String, isFavorite: Boolean) {
+        dao.setFavorite(id, isFavorite)
+    }
+
+    // --- User-created custom lists ---
+
+    fun observeLists(): Flow<List<CustomListEntity>> = listDao.observeLists()
+
+    fun observeListCounts(): Flow<List<ListCountRow>> = listDao.observeListCounts()
+
+    suspend fun createList(name: String): String {
+        val id = UUID.randomUUID().toString()
+        listDao.insertList(CustomListEntity(id = id, name = name, createdAt = System.currentTimeMillis()))
+        return id
+    }
+
+    suspend fun renameList(id: String, name: String) = listDao.renameList(id, name)
+
+    suspend fun deleteList(id: String) = listDao.deleteList(id)
+
+    suspend fun addItemToList(listId: String, itemId: String) =
+        listDao.addItemToList(ListItemCrossRef(listId, itemId))
+
+    suspend fun removeItemFromList(listId: String, itemId: String) = listDao.removeItemFromList(listId, itemId)
+
+    fun observeItemsInList(listId: String): Flow<List<MediaItemEntity>> = listDao.observeItemsInList(listId)
+
+    fun observeListIdsForItem(itemId: String): Flow<List<String>> = listDao.observeListIdsForItem(itemId)
 
     fun observeEpisodesForShow(showId: String): Flow<List<MediaItemEntity>> = dao.observeEpisodesForShow(showId)
 

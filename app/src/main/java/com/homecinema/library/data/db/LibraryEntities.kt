@@ -53,5 +53,7 @@ data class MediaItemEntity(
     // Resume-playback tracking, updated by PlayerScreen as it plays.
     val playbackPositionMs: Long = 0,
     val durationMs: Long = 0,
-    val lastPlayedAt: Long = 0
+    val lastPlayedAt: Long = 0,
+
+    val isFavorite: Boolean = false
 )

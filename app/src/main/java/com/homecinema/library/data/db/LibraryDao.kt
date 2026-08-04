@@ -69,4 +69,10 @@ interface LibraryDao {
             "ORDER BY lastPlayedAt DESC LIMIT 20"
     )
     fun observeContinueWatching(): Flow<List<MediaItemEntity>>
+
+    @Query("UPDATE media_items SET isFavorite = :isFavorite WHERE id = :id")
+    suspend fun setFavorite(id: String, isFavorite: Boolean)
+
+    @Query("SELECT * FROM media_items WHERE isFavorite = 1 ORDER BY title ASC")
+    fun observeFavorites(): Flow<List<MediaItemEntity>>
 }

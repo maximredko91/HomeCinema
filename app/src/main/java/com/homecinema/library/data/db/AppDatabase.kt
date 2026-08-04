@@ -32,16 +32,39 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
-@Database(entities = [MediaItemEntity::class, SmbSourceEntity::class], version = 6, exportSchema = false)
+/** Adds favorites (a plain column on media_items) and user-created custom lists (two new
+ * tables) - same real-migration approach as MIGRATION_5_6 above. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE media_items ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS custom_lists (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, createdAt INTEGER NOT NULL)"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS list_items (listId TEXT NOT NULL, itemId TEXT NOT NULL, " +
+                "PRIMARY KEY(listId, itemId), " +
+                "FOREIGN KEY(listId) REFERENCES custom_lists(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY(itemId) REFERENCES media_items(id) ON DELETE CASCADE)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_list_items_itemId ON list_items(itemId)")
+    }
+}
+
+@Database(
+    entities = [MediaItemEntity::class, SmbSourceEntity::class, CustomListEntity::class, ListItemCrossRef::class],
+    version = 7,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
     abstract fun smbSourceDao(): SmbSourceDao
+    abstract fun listDao(): ListDao
 
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "home_cinema.db")
-                .addMigrations(MIGRATION_5_6)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
                 // Safety net only for gaps not covered by an explicit migration above -
                 // every version bump from here on should get a real Migration instead.
                 .fallbackToDestructiveMigration(dropAllTables = true)
