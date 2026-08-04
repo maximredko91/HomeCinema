@@ -50,9 +50,17 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+/** Adds media_items.originalTitle (from .nfo <originaltitle>) - same real-migration approach
+ * as the ones above. */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE media_items ADD COLUMN originalTitle TEXT")
+    }
+}
+
 @Database(
     entities = [MediaItemEntity::class, SmbSourceEntity::class, CustomListEntity::class, ListItemCrossRef::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -64,7 +72,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "home_cinema.db")
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 // Safety net only for gaps not covered by an explicit migration above -
                 // every version bump from here on should get a real Migration instead.
                 .fallbackToDestructiveMigration(dropAllTables = true)

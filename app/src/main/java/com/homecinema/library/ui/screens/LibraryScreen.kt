@@ -73,6 +73,7 @@ import com.homecinema.library.ui.theme.LocalIsGlassTheme
 import com.homecinema.library.ui.theme.glassContainerColor
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.glassSheetContainerColor
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import kotlinx.coroutines.launch
@@ -378,6 +379,16 @@ private fun LibraryGrid(
     }
     val showAlphabetBar = alphabetIndexEnabled && letterIndex.size > 1
 
+    // Sorted by first-item-index so we can find "which letter section is the grid currently
+    // scrolled to" - the last entry whose starting index is still <= the first visible item.
+    val sortedLetterEntries = remember(letterIndex) { letterIndex.entries.sortedBy { it.value } }
+    val currentScrollLetter by remember(sortedLetterEntries) {
+        derivedStateOf {
+            val visibleIndex = gridState.firstVisibleItemIndex
+            sortedLetterEntries.lastOrNull { it.value <= visibleIndex }?.key
+        }
+    }
+
     Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 when {
@@ -440,6 +451,8 @@ private fun LibraryGrid(
             if (showAlphabetBar) {
                 AlphabetIndexBar(
                     letters = letterIndex.keys.toList(),
+                    activeScrollLetter = currentScrollLetter,
+                    topInset = topContentPadding,
                     onLetterSelected = { letter ->
                         letterIndex[letter]?.let { index -> scope.launch { gridState.scrollToItem(index) } }
                     }
@@ -908,17 +921,22 @@ internal fun filmsWord(count: Int): String {
 @Composable
 private fun AlphabetIndexBar(
     letters: List<String>,
+    activeScrollLetter: String?,
+    topInset: androidx.compose.ui.unit.Dp,
     onLetterSelected: (String) -> Unit
 ) {
     var heightPx by remember { mutableStateOf(0f) }
-    var activeLetter by remember { mutableStateOf<String?>(null) }
+    var dragLetter by remember { mutableStateOf<String?>(null) }
+    // While dragging the index bar itself, that takes priority; otherwise highlight
+    // whichever letter section the grid is currently scrolled to.
+    val highlightedLetter = dragLetter ?: activeScrollLetter
 
     fun selectAt(y: Float) {
         if (heightPx <= 0f || letters.isEmpty()) return
         val index = (y / heightPx * letters.size).toInt().coerceIn(0, letters.lastIndex)
         val letter = letters[index]
-        if (letter != activeLetter) {
-            activeLetter = letter
+        if (letter != dragLetter) {
+            dragLetter = letter
             onLetterSelected(letter)
         }
     }
@@ -926,6 +944,7 @@ private fun AlphabetIndexBar(
     Column(
         modifier = Modifier
             .fillMaxHeight()
+            .padding(top = topInset)
             .width(22.dp)
             .onSizeChanged { heightPx = it.height.toFloat() }
             .pointerInput(letters) {
@@ -940,7 +959,7 @@ private fun AlphabetIndexBar(
                         selectAt(change.position.y)
                         change.consume()
                     }
-                    activeLetter = null
+                    dragLetter = null
                 }
             },
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -950,8 +969,8 @@ private fun AlphabetIndexBar(
             Text(
                 letter,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (letter == activeLetter) FontWeight.Bold else FontWeight.Normal,
-                color = if (letter == activeLetter) MaterialTheme.colorScheme.primary
+                fontWeight = if (letter == highlightedLetter) FontWeight.Bold else FontWeight.Normal,
+                color = if (letter == highlightedLetter) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
@@ -1000,8 +1019,7 @@ private fun FiltersSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = glassContainerColor,
-        modifier = Modifier.glassEffect(shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+        containerColor = glassSheetContainerColor
     ) {
         Column(
             modifier = Modifier

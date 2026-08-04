@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
@@ -20,6 +22,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.MediaItemEntity
@@ -131,12 +134,17 @@ fun MediaPosterCard(
 
         Spacer(Modifier.height(8.dp))
 
-        Text(
+        // Auto-shrinks down to minFontSize before falling back to ellipsis, so a long
+        // title stays fully readable at 3 grid columns instead of always clipping to
+        // whatever fit at the original titleMedium size.
+        val titleColor = MaterialTheme.colorScheme.onBackground
+        BasicText(
             text = item.title,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onBackground
+            autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 16.sp),
+            color = { titleColor }
         )
 
         val subtitle = buildList {

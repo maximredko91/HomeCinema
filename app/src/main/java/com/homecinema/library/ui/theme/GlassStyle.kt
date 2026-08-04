@@ -1,5 +1,6 @@
 package com.homecinema.library.ui.theme
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -103,3 +104,13 @@ fun homeCinemaTopAppBarColors(): TopAppBarColors =
 val glassContainerColor: Color
     @Composable
     get() = if (LocalIsGlassTheme.current) Color.Transparent else MaterialTheme.colorScheme.surface
+
+/** Container color for sheets Material3 renders in a separate Android Window
+ * (ModalBottomSheet is a Dialog under the hood) - Haze's blur can't cross that window
+ * boundary, and passing ANY custom Modifier (even a plain clip+background+border, no Haze
+ * involved) into ModalBottomSheet's own `modifier` param was empirically found to corrupt
+ * its height measurement, silently rendering the sheet at ~0 height with no crash or log.
+ * Use this only via ModalBottomSheet's `containerColor` param, never via its `modifier`. */
+val glassSheetContainerColor: Color
+    @Composable
+    get() = if (LocalIsGlassTheme.current) GlassSurface.copy(alpha = 0.94f) else MaterialTheme.colorScheme.surface

@@ -8,6 +8,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,8 +43,8 @@ import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.components.ZoomableImageDialog
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
-import com.homecinema.library.ui.theme.glassContainerColor
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.glassSheetContainerColor
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 import java.io.File
@@ -67,6 +70,7 @@ fun DetailScreen(
     val listIdsForItem by app.repository.observeListIdsForItem(itemId).collectAsState(initial = emptyList())
     var zoomedImage by remember { mutableStateOf<String?>(null) }
     var addToListSheetOpen by remember { mutableStateOf(false) }
+    var directorSheetName by remember { mutableStateOf<String?>(null) }
 
     ProvideGlassHazeState {
     Scaffold(
@@ -140,6 +144,13 @@ fun DetailScreen(
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(current.title, style = MaterialTheme.typography.titleLarge)
+                    if (!current.originalTitle.isNullOrBlank()) {
+                        Text(
+                            "(${current.originalTitle})",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
                     Spacer(Modifier.height(6.dp))
                     val meta = buildList {
                         current.year?.let { add(it.toString()) }
@@ -210,10 +221,23 @@ fun DetailScreen(
             }
 
             if (!current.director.isNullOrBlank()) {
+                val directorText = current.director
                 Spacer(Modifier.height(16.dp))
                 Text("Режиссёр", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
-                Text(current.director, style = MaterialTheme.typography.bodyMedium)
+                val directors = remember(directorText) {
+                    directorText.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                }
+                FlowRow {
+                    directors.forEachIndexed { index, name ->
+                        Text(
+                            text = if (index < directors.lastIndex) "$name, " else name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable { directorSheetName = name }
+                        )
+                    }
+                }
             }
 
             if (!current.actors.isNullOrBlank()) {
@@ -269,6 +293,63 @@ fun DetailScreen(
             onDismiss = { addToListSheetOpen = false }
         )
     }
+
+    directorSheetName?.let { director ->
+        DirectorFilmographySheet(
+            director = director,
+            items = libraryItems.filter { other ->
+                other.id != itemId &&
+                    other.director.orEmpty().split(",").map { it.trim() }
+                        .any { it.equals(director, ignoreCase = true) }
+            },
+            onOpenDetail = { id ->
+                directorSheetName = null
+                onOpenDetail(id)
+            },
+            onDismiss = { directorSheetName = null }
+        )
+    }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DirectorFilmographySheet(
+    director: String,
+    items: List<MediaItemEntity>,
+    onOpenDetail: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = glassSheetContainerColor
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Text("Фильмы режиссёра «$director»", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(12.dp))
+
+            if (items.isEmpty()) {
+                Text(
+                    "Другие фильмы этого режиссёра в библиотеке не найдены.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.heightIn(max = 480.dp)
+                ) {
+                    gridItems(items, key = { it.id }) { filmItem ->
+                        MediaPosterCard(item = filmItem, onClick = { onOpenDetail(filmItem.id) })
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -287,8 +368,7 @@ private fun AddToListSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = glassContainerColor,
-        modifier = Modifier.glassEffect(shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+        containerColor = glassSheetContainerColor
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             Text("Добавить в список", style = MaterialTheme.typography.titleLarge)

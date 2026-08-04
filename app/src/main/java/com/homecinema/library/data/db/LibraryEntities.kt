@@ -18,6 +18,7 @@ enum class DownloadState { NONE, DOWNLOADING, COMPLETED, FAILED }
 data class MediaItemEntity(
     @PrimaryKey val id: String, // stable hash of the folder/file's smb path
     val title: String,
+    val originalTitle: String? = null, // from .nfo <originaltitle>, e.g. "Venom" for "Веном"
     val year: Int?,
     val genres: String, // comma-separated for simplicity
     val plot: String,

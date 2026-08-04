@@ -154,6 +154,7 @@ class LibraryScanner(
             val showEntity = MediaItemEntity(
                 id = id,
                 title = title,
+                originalTitle = nfoData?.originalTitle?.takeIf { it.isNotBlank() && it != title },
                 year = nfoData?.year,
                 genres = nfoData?.genres?.joinToString(", ").orEmpty(),
                 plot = nfoData?.plot.orEmpty(),
@@ -286,6 +287,7 @@ class LibraryScanner(
         return MediaItemEntity(
             id = id,
             title = title,
+            originalTitle = nfoData?.originalTitle?.takeIf { it.isNotBlank() && it != title },
             year = nfoData?.year,
             genres = nfoData?.genres?.joinToString(", ").orEmpty(),
             plot = nfoData?.plot.orEmpty(),
