@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
+import com.homecinema.library.data.media.extractReleaseQuality
 import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.streaming.StreamingService
 import com.homecinema.library.data.streaming.mimeTypeForExtension
@@ -71,6 +73,7 @@ fun DetailScreen(
     var zoomedImage by remember { mutableStateOf<String?>(null) }
     var addToListSheetOpen by remember { mutableStateOf(false) }
     var directorSheetName by remember { mutableStateOf<String?>(null) }
+    var actorSheetName by remember { mutableStateOf<String?>(null) }
 
     ProvideGlassHazeState {
     Scaffold(
@@ -151,12 +154,25 @@ fun DetailScreen(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
+                    if (!current.tagline.isNullOrBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            current.tagline,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
                     Spacer(Modifier.height(6.dp))
+                    val releaseQuality = remember(current.videoFilePath) {
+                        extractReleaseQuality(current.videoFilePath.substringAfterLast('/'))
+                    }
                     val meta = buildList {
                         current.year?.let { add(it.toString()) }
                         current.rating?.let { add("★ ${"%.1f".format(it)}") }
                         current.runtimeMinutes?.let { add("$it мин") }
                         current.country?.takeIf { it.isNotBlank() }?.let { add(it) }
+                        current.mpaa?.takeIf { it.isNotBlank() }?.let { add(it) }
+                        releaseQuality?.let { add(it) }
                     }.joinToString("  •  ")
                     if (meta.isNotBlank()) {
                         Text(meta, style = MaterialTheme.typography.bodyMedium)
@@ -213,6 +229,13 @@ fun DetailScreen(
                 )
             }
 
+            if (!current.studio.isNullOrBlank()) {
+                Spacer(Modifier.height(16.dp))
+                Text("Студия", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(current.studio, style = MaterialTheme.typography.bodyMedium)
+            }
+
             if (current.plot.isNotBlank()) {
                 Spacer(Modifier.height(20.dp))
                 Text("Описание", style = MaterialTheme.typography.titleMedium)
@@ -228,23 +251,44 @@ fun DetailScreen(
                 val directors = remember(directorText) {
                     directorText.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 }
+                val clickableDirectors = remember(directors, libraryItems, current.id) {
+                    namesWithOtherCredits(directors, libraryItems, current.id) { it.director }
+                }
                 FlowRow {
                     directors.forEachIndexed { index, name ->
+                        val hasFilmography = name in clickableDirectors
                         Text(
                             text = if (index < directors.lastIndex) "$name, " else name,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { directorSheetName = name }
+                            color = if (hasFilmography) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                            modifier = if (hasFilmography) Modifier.clickable { directorSheetName = name } else Modifier
                         )
                     }
                 }
             }
 
             if (!current.actors.isNullOrBlank()) {
+                val actorsText = current.actors
                 Spacer(Modifier.height(16.dp))
                 Text("В ролях", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
-                Text(current.actors, style = MaterialTheme.typography.bodyMedium)
+                val actors = remember(actorsText) {
+                    actorsText.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                }
+                val clickableActors = remember(actors, libraryItems, current.id) {
+                    namesWithOtherCredits(actors, libraryItems, current.id) { it.actors }
+                }
+                FlowRow {
+                    actors.forEachIndexed { index, name ->
+                        val hasFilmography = name in clickableActors
+                        Text(
+                            text = if (index < actors.lastIndex) "$name, " else name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (hasFilmography) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                            modifier = if (hasFilmography) Modifier.clickable { actorSheetName = name } else Modifier
+                        )
+                    }
+                }
             }
 
             val collectionName = current.collectionName
@@ -295,8 +339,9 @@ fun DetailScreen(
     }
 
     directorSheetName?.let { director ->
-        DirectorFilmographySheet(
-            director = director,
+        PersonFilmographySheet(
+            title = "Фильмы режиссёра «$director»",
+            emptyMessage = "Другие фильмы этого режиссёра в библиотеке не найдены.",
             items = libraryItems.filter { other ->
                 other.id != itemId &&
                     other.director.orEmpty().split(",").map { it.trim() }
@@ -309,13 +354,32 @@ fun DetailScreen(
             onDismiss = { directorSheetName = null }
         )
     }
+
+    actorSheetName?.let { actor ->
+        PersonFilmographySheet(
+            title = "Фильмы с «$actor»",
+            emptyMessage = "Другие фильмы с этим актёром в библиотеке не найдены.",
+            items = libraryItems.filter { other ->
+                other.id != itemId &&
+                    other.actors.orEmpty().split(",").map { it.trim() }
+                        .any { it.equals(actor, ignoreCase = true) }
+            },
+            onOpenDetail = { id ->
+                actorSheetName = null
+                onOpenDetail(id)
+            },
+            onDismiss = { actorSheetName = null }
+        )
+    }
     }
 }
 
+/** Shared by the director and actor "click a name -> see their other films" sheets. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DirectorFilmographySheet(
-    director: String,
+private fun PersonFilmographySheet(
+    title: String,
+    emptyMessage: String,
     items: List<MediaItemEntity>,
     onOpenDetail: (String) -> Unit,
     onDismiss: () -> Unit
@@ -328,12 +392,12 @@ private fun DirectorFilmographySheet(
         containerColor = glassSheetContainerColor
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-            Text("Фильмы режиссёра «$director»", style = MaterialTheme.typography.titleLarge)
+            Text(title, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(12.dp))
 
             if (items.isEmpty()) {
                 Text(
-                    "Другие фильмы этого режиссёра в библиотеке не найдены.",
+                    emptyMessage,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
@@ -422,11 +486,33 @@ private fun AddToListSheet(
     }
 }
 
+/** Which of [names] (director or actor names, already split from a comma-separated field) have
+ * at least one OTHER item in [libraryItems] crediting them via [creditsOf] - used so a name with
+ * nothing else to show isn't highlighted/clickable as if tapping it would lead somewhere. */
+private fun namesWithOtherCredits(
+    names: List<String>,
+    libraryItems: List<MediaItemEntity>,
+    currentId: String,
+    creditsOf: (MediaItemEntity) -> String?
+): Set<String> = names.filter { name ->
+    libraryItems.any { other ->
+        other.id != currentId &&
+            creditsOf(other).orEmpty().split(",").map { it.trim() }.any { it.equals(name, ignoreCase = true) }
+    }
+}.toSet()
+
 /**
  * Hands the video off to any installed external player. Prefers the locally downloaded copy
  * (via FileProvider) when available. Otherwise, since only VLC understands a raw smb:// URI
  * passed via ACTION_VIEW, bridges the SMB stream through a local loopback HTTP server
  * ([StreamingService]) so any external player can read it.
+ *
+ * If there's a meaningful saved position (same [shouldResume] check the internal player uses),
+ * passes it via the "position" intent extra (milliseconds) - a de facto convention popularized
+ * by MX Player and honored by several other players, though not a formal Android standard.
+ * One-way only: there's no reliable way to get playback position back from an external player
+ * on exit (no shared result contract), so this can seek to where you left off but can't update
+ * that position based on what happens in the external player afterward.
  */
 suspend fun playExternally(context: Context, item: MediaItemEntity) {
     val intent = Intent(Intent.ACTION_VIEW)
@@ -439,6 +525,9 @@ suspend fun playExternally(context: Context, item: MediaItemEntity) {
         val streamUrl = StreamingService.streamUrl(context, item.id)
         val mimeType = mimeTypeForExtension(item.videoFilePath.substringAfterLast('.', ""))
         intent.setDataAndType(Uri.parse(streamUrl), mimeType)
+    }
+    if (shouldResume(item.playbackPositionMs, item.durationMs)) {
+        intent.putExtra("position", item.playbackPositionMs.toInt())
     }
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(intent) }

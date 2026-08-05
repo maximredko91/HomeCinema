@@ -58,9 +58,19 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+/** Adds media_items.mpaa/studio/tagline (from .nfo <mpaa>/<studio>/<tagline>) - same
+ * real-migration approach as the ones above. */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE media_items ADD COLUMN mpaa TEXT")
+        db.execSQL("ALTER TABLE media_items ADD COLUMN studio TEXT")
+        db.execSQL("ALTER TABLE media_items ADD COLUMN tagline TEXT")
+    }
+}
+
 @Database(
     entities = [MediaItemEntity::class, SmbSourceEntity::class, CustomListEntity::class, ListItemCrossRef::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -72,7 +82,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "home_cinema.db")
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 // Safety net only for gaps not covered by an explicit migration above -
                 // every version bump from here on should get a real Migration instead.
                 .fallbackToDestructiveMigration(dropAllTables = true)

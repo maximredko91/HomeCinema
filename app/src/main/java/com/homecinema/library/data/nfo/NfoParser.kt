@@ -24,7 +24,13 @@ data class NfoData(
     // from <set><name>...</name></set> - the Kodi "movie set" this title belongs to
     val collectionName: String? = null,
     // free-form theme keywords from <tag> - distinct from <genre>, e.g. "пираты", "based on a true story"
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    // content rating, e.g. "PG-13", "R", "16+"
+    val mpaa: String? = null,
+    // production studio(s)/network - Kodi allows multiple <studio> tags per title
+    val studios: List<String> = emptyList(),
+    // short marketing blurb, distinct from the full <plot>
+    val tagline: String? = null
 )
 
 private val ANIMATION_KEYWORDS = listOf("animation", "аним", "мультф", "cartoon", "anime")
@@ -65,6 +71,9 @@ object NfoParser {
         val actors = mutableListOf<String>()
         var collectionName: String? = null
         val tags = mutableListOf<String>()
+        var mpaa: String? = null
+        val studios = mutableListOf<String>()
+        var tagline: String? = null
 
         // A tag stack (rather than a single "current tag") is needed to tell apart
         // same-named leaf tags that mean different things depending on their parent,
@@ -95,6 +104,9 @@ object NfoParser {
                             "country" -> if (country == null) country = value
                             "director" -> directors.add(value)
                             "tag" -> tags.add(value)
+                            "mpaa" -> if (mpaa == null) mpaa = value
+                            "studio" -> studios.add(value)
+                            "tagline" -> if (tagline == null) tagline = value
                             "name" -> when (parentTag) {
                                 "set" -> collectionName = value
                                 "actor" -> actors.add(value)
@@ -122,7 +134,10 @@ object NfoParser {
             directors = directors.distinct(),
             actors = actors.distinct(),
             collectionName = collectionName?.takeIf { it.isNotBlank() },
-            tags = tags.distinct()
+            tags = tags.distinct(),
+            mpaa = mpaa,
+            studios = studios.distinct(),
+            tagline = tagline
         )
     }
 }

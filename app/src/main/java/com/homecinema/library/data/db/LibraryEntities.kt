@@ -40,6 +40,9 @@ data class MediaItemEntity(
     val actors: String? = null,   // comma-separated
     val collectionName: String? = null, // Kodi "movie set" this title belongs to, if any
     val tags: String = "", // comma-separated, from .nfo <tag> - free-form theme keywords for #hashtag search
+    val mpaa: String? = null, // content rating, e.g. "PG-13", "R", "16+"
+    val studio: String? = null, // comma-separated, from .nfo <studio> (Kodi allows more than one)
+    val tagline: String? = null, // short marketing blurb from .nfo <tagline>, distinct from plot
 
     // Episode hierarchy - only meaningful when mediaType == EPISODE
     val parentShowId: String? = null,
