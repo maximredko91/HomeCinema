@@ -353,8 +353,15 @@ fun LibraryScreen(
                             // Only show the alphabet bar once settled on this page - during a
                             // swipe HorizontalPager keeps neighboring pages composed so the
                             // transition can be followed, which otherwise let the bar's edge
-                            // show through over the Collections/Lists page mid-drag.
-                            alphabetIndexEnabled = alphabetIndexEnabled && !pagerState.isScrollInProgress,
+                            // show through over the Collections/Lists page mid-drag. Gated on
+                            // the pager's own horizontal offset rather than isScrollInProgress -
+                            // that flag also flips during an ordinary vertical fling inside the
+                            // nested grid (nested-scroll handshake with the pager), which made
+                            // the bar pop in/out and the grid reflow width on every scroll -
+                            // the "card jitter" bug. currentPageOffsetFraction only moves when
+                            // there's an actual horizontal drag/transition.
+                            alphabetIndexEnabled = alphabetIndexEnabled &&
+                                kotlin.math.abs(pagerState.currentPageOffsetFraction) < 0.01f,
                             gridColumns = gridColumns,
                             onOpenDetail = onOpenDetail,
                             onOpenSettings = onOpenSettings,

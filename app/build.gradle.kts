@@ -23,8 +23,8 @@ android {
         applicationId = "com.homecinema.library"
         minSdk = 31
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.13.01"
+        versionCode = 20
+        versionName = "1.13.02"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
