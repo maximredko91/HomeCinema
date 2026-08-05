@@ -2,15 +2,12 @@ package com.homecinema.library.data.update
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
 private const val LATEST_RELEASE_URL =
     "https://api.github.com/repos/maximredko91/HomeCinema/releases/latest"
-private const val ALL_RELEASES_URL =
-    "https://api.github.com/repos/maximredko91/HomeCinema/releases"
 
 data class ReleaseInfo(val version: String, val htmlUrl: String, val body: String, val apkUrl: String?)
 
@@ -47,30 +44,6 @@ object UpdateChecker {
                 apkUrl = apkUrl
             )
         }.getOrNull()
-    }
-
-    /** Full changelog for the "История изменений" section in Settings - every GitHub Release,
-     * newest first (GitHub's own list order), each with its raw release-notes body. */
-    suspend fun fetchAllReleases(): List<ReleaseNote> = withContext(Dispatchers.IO) {
-        runCatching {
-            val connection = (URL(ALL_RELEASES_URL).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 5000
-                readTimeout = 5000
-                setRequestProperty("Accept", "application/vnd.github+json")
-            }
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val array = JSONArray(body)
-            (0 until array.length()).map { i ->
-                val json = array.getJSONObject(i)
-                ReleaseNote(
-                    version = json.getString("tag_name").removePrefix("v"),
-                    name = json.optString("name").ifBlank { json.getString("tag_name") },
-                    body = json.optString("body").ifBlank { "Без описания." },
-                    publishedAt = json.optString("published_at")
-                )
-            }
-        }.getOrDefault(emptyList())
     }
 }
 

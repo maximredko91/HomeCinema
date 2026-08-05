@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
@@ -47,8 +49,8 @@ import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.settings.SmbConfig
 import com.homecinema.library.data.settings.ThemeMode
 import com.homecinema.library.data.smb.toSmbUserMessage
+import com.homecinema.library.data.update.LOCAL_CHANGELOG
 import com.homecinema.library.data.update.ReleaseNote
-import com.homecinema.library.data.update.UpdateChecker
 import com.homecinema.library.ui.theme.AccentColor
 import com.homecinema.library.ui.theme.GlassBackgroundColor
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
@@ -376,34 +378,54 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
 
 @Composable
 fun ChangelogScreen(onBack: () -> Unit) {
-    var releases by remember { mutableStateOf<List<ReleaseNote>?>(null) }
-    LaunchedEffect(Unit) {
-        releases = UpdateChecker.fetchAllReleases()
-    }
+    // Baked into the app (LOCAL_CHANGELOG) instead of fetched from the GitHub Releases API -
+    // this used to be the one place in the app that needed a network connection just to show
+    // static text, which meant it was unreadable offline.
+    var expandedVersion by remember { mutableStateOf<String?>(null) }
 
     SettingsSubScreenScaffold(title = "История изменений", onBack = onBack) {
-        when {
-            releases == null -> Text(
-                "Загрузка...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        LOCAL_CHANGELOG.forEach { release ->
+            ChangelogEntryRow(
+                release = release,
+                expanded = expandedVersion == release.version,
+                onToggle = {
+                    expandedVersion = if (expandedVersion == release.version) null else release.version
+                }
             )
-            releases!!.isEmpty() -> Text(
-                "Не удалось загрузить историю изменений — проверьте подключение к интернету.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            else -> releases!!.forEachIndexed { index, release ->
+        }
+    }
+}
+
+/** One version's row on the changelog screen - collapsed to just the version number by
+ * default (accordion, only one open at a time) so a long release history doesn't turn back
+ * into one long scroll, the exact problem the settings redesign just fixed elsewhere. */
+@Composable
+private fun ChangelogEntryRow(release: ReleaseNote, expanded: Boolean, onToggle: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassEffect(shape = MaterialTheme.shapes.medium),
+        colors = CardDefaults.cardColors(containerColor = glassContainerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (LocalIsGlassTheme.current) 0.dp else 1.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "v${release.version}",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Свернуть" else "Развернуть"
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
                 Column {
-                    if (index > 0) {
-                        HorizontalDivider()
-                        Spacer(Modifier.height(16.dp))
-                    }
-                    Text(
-                        "v${release.version}",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(release.body, style = MaterialTheme.typography.bodyMedium)
                 }
             }
@@ -795,10 +817,11 @@ private fun GlassBackgroundSwatch(preset: GlassBackgroundColor, selected: Boolea
         modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
-            .background(preset.surface)
-            .then(
-                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onBackground, CircleShape)
-                else Modifier
+            .background(preset.swatch)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.onBackground else Color.White.copy(alpha = 0.35f),
+                shape = CircleShape
             )
             .clickable(onClickLabel = preset.label, onClick = onClick),
         contentAlignment = Alignment.Center
@@ -807,7 +830,7 @@ private fun GlassBackgroundSwatch(preset: GlassBackgroundColor, selected: Boolea
             Icon(
                 Icons.Default.Check,
                 contentDescription = preset.label,
-                tint = if (preset.surface.luminance() > 0.5f) Color.Black else Color.White,
+                tint = if (preset.swatch.luminance() > 0.5f) Color.Black else Color.White,
                 modifier = Modifier.size(18.dp)
             )
         }
