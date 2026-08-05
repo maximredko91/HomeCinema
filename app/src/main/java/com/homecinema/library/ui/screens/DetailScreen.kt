@@ -1,5 +1,6 @@
 package com.homecinema.library.ui.screens
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -37,7 +38,9 @@ import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.media.extractReleaseQuality
+import com.homecinema.library.data.media.findLocalSiblingSubtitle
 import com.homecinema.library.data.settings.PlaybackMode
+import com.homecinema.library.data.smb.toSmbConfig
 import com.homecinema.library.data.streaming.StreamingService
 import com.homecinema.library.data.streaming.mimeTypeForExtension
 import com.homecinema.library.ui.components.DownloadControlRow
@@ -48,7 +51,9 @@ import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.glassSheetContainerColor
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -203,18 +208,28 @@ fun DetailScreen(
                             Text("Смотреть")
                         }
                     } else {
+                        // Forced external is the only option here, so it doesn't need its own
+                        // "во внешнем плеере" label to distinguish it from anything - that
+                        // wording only earns its keep in ASK mode, next to a real second
+                        // button offering the other choice.
                         Button(onClick = { scope.launch { playExternally(context, current) } }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Смотреть во внешнем плеере")
+                            Text("Смотреть")
                         }
                     }
                     if (playbackMode == PlaybackMode.ASK) {
                         Spacer(Modifier.width(12.dp))
-                        OutlinedButton(onClick = { scope.launch { playExternally(context, current) } }) {
+                        // Tinted icon+text only, no custom border - the default neutral
+                        // outline keeps this proportionate next to "Смотреть"/"Скачать"
+                        // instead of visually outweighing them.
+                        OutlinedButton(
+                            onClick = { scope.launch { playExternally(context, current) } },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.tertiary)
+                        ) {
                             Icon(Icons.Default.OpenInNew, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Во внешнем плеере")
+                            Text("Внешний плеер")
                         }
                     }
                 }
@@ -517,18 +532,70 @@ private fun namesWithOtherCredits(
 suspend fun playExternally(context: Context, item: MediaItemEntity) {
     val intent = Intent(Intent.ACTION_VIEW)
     val localPath = item.localFilePath
+    var subtitleUri: Uri? = null
+
     if (localPath != null && File(localPath).exists()) {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(localPath))
+        val videoFile = File(localPath)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", videoFile)
         intent.setDataAndType(uri, "video/*")
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // Only present if DownloadWorker found and saved one alongside the video.
+        subtitleUri = findLocalSiblingSubtitle(videoFile)?.let {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", it)
+        }
     } else {
         val streamUrl = StreamingService.streamUrl(context, item.id)
         val mimeType = mimeTypeForExtension(item.videoFilePath.substringAfterLast('.', ""))
         intent.setDataAndType(Uri.parse(streamUrl), mimeType)
+
+        val app = HomeCinemaApp.instance
+        val source = app.repository.getSource(item.sourceId)
+        // Best-effort and defensive on purpose - see the matching comment in PlayerScreen.kt.
+        // A failed/slow lookup here must never be able to stop external playback from
+        // starting at all.
+        val hasSubtitle = source != null && withTimeoutOrNull(3000) {
+            runCatching { app.smbManager.findSiblingSubtitle(source.id, source.toSmbConfig(), item.videoFilePath) }
+                .getOrNull()
+        } != null
+        if (hasSubtitle) {
+            // A plain http:// URL over the loopback proxy - no permission grant needed,
+            // unlike the content:// case below.
+            subtitleUri = Uri.parse(StreamingService.subtitleUrl(item.id))
+        }
     }
+
+    // Best-effort: different external players expect the sidecar subtitle via different,
+    // non-standardized intent extras, so several conventions are set at once and whichever
+    // the installed player understands takes effect ("subs"/"subs.name" - MX Player and a few
+    // others copying it; "subtitles_location" - VLC). A content:// subtitle URI (the local-
+    // download case) needs an explicit ClipData grant since FLAG_GRANT_READ_URI_PERMISSION on
+    // its own only covers the Intent's main data URI, not URIs passed as extras.
+    subtitleUri?.let { uri ->
+        intent.putExtra("subs", arrayOf(uri))
+        intent.putExtra("subs.name", arrayOf(item.title))
+        intent.putExtra("subtitles_location", uri.toString())
+        if (uri.scheme == "content") {
+            intent.clipData = ClipData.newUri(context.contentResolver, "subtitle", uri)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
     if (shouldResume(item.playbackPositionMs, item.durationMs)) {
         intent.putExtra("position", item.playbackPositionMs.toInt())
     }
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
+
+    val preferredPackage = HomeCinemaApp.instance.settingsStore.preferredExternalPlayerPackageFlow.first()
+    if (preferredPackage.isNotBlank()) {
+        intent.setPackage(preferredPackage)
+        // Fall back to the system chooser if the preferred app was uninstalled since it was
+        // picked, rather than silently doing nothing.
+        val launched = runCatching { context.startActivity(intent) }.isSuccess
+        if (!launched) {
+            intent.setPackage(null)
+            runCatching { context.startActivity(intent) }
+        }
+    } else {
+        runCatching { context.startActivity(intent) }
+    }
 }

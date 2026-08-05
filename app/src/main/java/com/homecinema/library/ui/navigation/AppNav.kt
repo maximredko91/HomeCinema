@@ -11,6 +11,7 @@ import com.homecinema.library.ui.screens.AppearanceSettingsScreen
 import com.homecinema.library.ui.screens.ChangelogScreen
 import com.homecinema.library.ui.screens.DetailScreen
 import com.homecinema.library.ui.screens.DownloadsScreen
+import com.homecinema.library.ui.screens.HistoryScreen
 import com.homecinema.library.ui.screens.LibraryScreen
 import com.homecinema.library.ui.screens.LibrarySettingsScreen
 import com.homecinema.library.ui.screens.PlaybackSettingsScreen
@@ -31,6 +32,7 @@ private object Routes {
     const val SETTINGS_CHANGELOG = "settings/changelog"
     const val SETTINGS_ABOUT = "settings/about"
     const val DOWNLOADS = "downloads"
+    const val HISTORY = "history"
     const val DETAIL = "detail/{id}"
     const val SHOW_DETAIL = "show/{id}"
     const val PLAYER = "player/{id}"
@@ -46,6 +48,7 @@ fun AppNavHost() {
                 onOpenDetail = { id -> navController.navigate("detail/$id") },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
+                onOpenHistory = { navController.navigate(Routes.HISTORY) },
                 onPlayItem = { id -> navController.navigate("player/$id") }
             )
         }
@@ -86,6 +89,12 @@ fun AppNavHost() {
             DownloadsScreen(
                 onBack = { navController.popBackStack() },
                 onPlay = { id -> navController.navigate("player/$id") }
+            )
+        }
+        composable(Routes.HISTORY) {
+            HistoryScreen(
+                onBack = { navController.popBackStack() },
+                onOpenDetail = { id -> navController.navigate("detail/$id") }
             )
         }
         composable(

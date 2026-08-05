@@ -13,6 +13,7 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.LibraryDao
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.media.findLocalSiblingSubtitle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -70,14 +71,20 @@ class DownloadManager(
         // once cancellation lands.
         scope.launch(Dispatchers.IO) {
             val item = dao.getById(itemId) ?: return@launch
-            destFileFor(context as HomeCinemaApp, item).delete()
+            val videoFile = destFileFor(context as HomeCinemaApp, item)
+            findLocalSiblingSubtitle(videoFile)?.delete()
+            videoFile.delete()
             dao.updateDownloadResult(itemId, DownloadState.NONE, 0, null)
         }
         workManager.cancelUniqueWork(downloadWorkName(itemId))
     }
 
     suspend fun deleteDownload(item: MediaItemEntity) {
-        item.localFilePath?.let { File(it).delete() }
+        item.localFilePath?.let { path ->
+            val videoFile = File(path)
+            findLocalSiblingSubtitle(videoFile)?.delete()
+            videoFile.delete()
+        }
         dao.updateDownloadResult(item.id, DownloadState.NONE, 0, null)
     }
 }

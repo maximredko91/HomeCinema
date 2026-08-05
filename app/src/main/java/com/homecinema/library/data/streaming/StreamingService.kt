@@ -117,5 +117,13 @@ class StreamingService : Service() {
             ContextCompat.startForegroundService(context, Intent(context, StreamingService::class.java))
             "http://127.0.0.1:${srv.listeningPort}/stream/$itemId"
         }
+
+        /** Only meaningful right after [streamUrl] for the same item, which already ensured
+         * the server (and its foreground service) is running - reuses that same server/port
+         * rather than starting anything of its own. */
+        suspend fun subtitleUrl(itemId: String): String = withContext(Dispatchers.IO) {
+            val srv = ensureServerStarted()
+            "http://127.0.0.1:${srv.listeningPort}/subtitle/$itemId"
+        }
     }
 }

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.ui.components.DownloadControlRow
 import com.homecinema.library.ui.components.ZoomableImageDialog
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
@@ -44,6 +45,7 @@ fun ShowDetailScreen(
 
     val show by app.repository.observeById(showId).collectAsState(initial = null)
     val episodes by app.repository.observeEpisodesForShow(showId).collectAsState(initial = emptyList())
+    val playbackMode by app.settingsStore.playbackModeFlow.collectAsState(initial = PlaybackMode.ASK)
     val liveProgressMap by app.downloadManager.liveProgress.collectAsState()
     var zoomedImage by remember { mutableStateOf<String?>(null) }
 
@@ -98,6 +100,7 @@ fun ShowDetailScreen(
                     EpisodeRow(
                         episode = episode,
                         liveProgress = liveProgressMap[episode.id],
+                        playbackMode = playbackMode,
                         onPlay = { onPlayEpisode(episode.id) },
                         onPlayExternally = { scope.launch { playExternally(context, episode) } },
                         onDownload = { app.downloadManager.start(episode) },
@@ -205,6 +208,7 @@ private fun ShowHeader(show: MediaItemEntity, onImageClick: (String) -> Unit) {
 private fun EpisodeRow(
     episode: MediaItemEntity,
     liveProgress: Int?,
+    playbackMode: PlaybackMode,
     onPlay: () -> Unit,
     onPlayExternally: () -> Unit,
     onDownload: () -> Unit,
@@ -270,16 +274,33 @@ private fun EpisodeRow(
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onPlay) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Смотреть")
+                if (playbackMode != PlaybackMode.EXTERNAL) {
+                    TextButton(onClick = onPlay) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Смотреть")
+                    }
+                } else {
+                    // Forced external is the only option here, so it looks like a plain
+                    // "Смотреть" button (same icon/color as the internal-play one above) -
+                    // the tertiary color + OpenInNew icon are reserved for ASK mode's second
+                    // button below, where they're needed to tell two real choices apart.
+                    TextButton(onClick = onPlayExternally) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Смотреть")
+                    }
                 }
-                Spacer(Modifier.width(8.dp))
-                TextButton(onClick = onPlayExternally) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Внешний плеер")
+                if (playbackMode == PlaybackMode.ASK) {
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(
+                        onClick = onPlayExternally,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.tertiary)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Внешний плеер")
+                    }
                 }
             }
             Spacer(Modifier.height(4.dp))

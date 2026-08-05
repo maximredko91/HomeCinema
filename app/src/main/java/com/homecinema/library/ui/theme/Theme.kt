@@ -51,6 +51,14 @@ fun HomeCinemaTheme(
 ) {
     val isDark = resolveDarkTheme(themeMode, isSystemInDarkTheme())
     val onAccent = onColorFor(accent.color)
+    // A real, deliberately-picked tertiary rather than Material3's baseline default (an
+    // arbitrary purple with no relation to the app's own palette) - reuses one of the
+    // existing curated AccentColor swatches so it always reads as "designed to belong here"
+    // instead of clashing with whatever accent the user actually picked. Falls back to a
+    // different swatch on the rare chance the user's accent already IS that color, so the
+    // two never end up identical.
+    val tertiaryColor = if (accent == AccentColor.BLUE) AccentColor.TEAL.color else AccentColor.BLUE.color
+    val onTertiaryColor = onColorFor(tertiaryColor)
 
     val colorScheme = if (isDark) {
         val (bg, surface, surfaceVariant) = when (themeMode) {
@@ -64,10 +72,12 @@ fun HomeCinemaTheme(
             surfaceVariant = surfaceVariant,
             primary = accent.color,
             secondary = accent.color,
+            tertiary = tertiaryColor,
             onBackground = CinemaTextPrimary,
             onSurface = CinemaTextPrimary,
             onPrimary = onAccent,
             onSecondary = onAccent,
+            onTertiary = onTertiaryColor,
             error = CinemaError
         )
     } else {
@@ -76,8 +86,10 @@ fun HomeCinemaTheme(
             surface = LightBackground,
             primary = accent.color,
             secondary = accent.color,
+            tertiary = tertiaryColor,
             onPrimary = onAccent,
             onSecondary = onAccent,
+            onTertiary = onTertiaryColor,
             error = CinemaError
         )
     }

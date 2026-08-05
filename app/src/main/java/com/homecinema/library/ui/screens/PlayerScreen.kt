@@ -15,10 +15,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionOff
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,11 +40,14 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.data.media.findLocalSiblingSubtitle
+import com.homecinema.library.data.media.subtitleMimeType
 import com.homecinema.library.data.smb.SmbDataSource
 import com.homecinema.library.data.smb.toSmbConfig
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
@@ -52,8 +55,20 @@ import com.homecinema.library.ui.theme.glassBorderBrush
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import kotlin.math.roundToInt
+
+/** A sidecar subtitle file, attached to the MediaItem so DefaultMediaSourceFactory wires it
+ * up itself - SELECTION_FLAG_DEFAULT auto-selects it for playback, after which the existing CC
+ * toggle (which already governs C.TRACK_TYPE_TEXT) can turn it on/off same as any subtitle
+ * track muxed inside the container. */
+private fun buildSubtitleConfiguration(uri: Uri, extension: String): MediaItem.SubtitleConfiguration =
+    MediaItem.SubtitleConfiguration.Builder(uri)
+        .setMimeType(subtitleMimeType(extension))
+        .setLanguage("ru")
+        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+        .build()
 
 private enum class GestureIndicatorMode { NONE, BRIGHTNESS, VOLUME }
 
@@ -91,7 +106,7 @@ fun PlayerScreen(itemId: String) {
     var subtitlesEnabled by remember { mutableStateOf(true) }
     var hasSubtitleTrack by remember { mutableStateOf(false) }
     var audioOptions by remember { mutableStateOf<List<AudioTrackOption>>(emptyList()) }
-    var audioMenuOpen by remember { mutableStateOf(false) }
+    var playerSettingsMenuOpen by remember { mutableStateOf(false) }
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
@@ -142,17 +157,48 @@ fun PlayerScreen(itemId: String) {
         // works even if the phone has temporarily lost its connection to the router.
         val localFile = loaded.localFilePath?.let { File(it) }?.takeIf { it.exists() }
 
-        val mediaSource = if (localFile != null) {
-            val dataSourceFactory = DefaultDataSource.Factory(context)
-            val mediaItem = MediaItem.fromUri(Uri.fromFile(localFile))
-            ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+        val dataSourceFactory: DataSource.Factory
+        val videoUri: Uri
+        val subtitleConfiguration: MediaItem.SubtitleConfiguration?
+
+        if (localFile != null) {
+            dataSourceFactory = DefaultDataSource.Factory(context)
+            videoUri = Uri.fromFile(localFile)
+            // Best-effort and defensive on purpose: this is a "nice to have" lookup that must
+            // never be able to stop the video itself from playing, whether it fails outright
+            // or (an SMB share behaving oddly) just never returns.
+            val subtitleFile = withTimeoutOrNull(3000) {
+                runCatching { findLocalSiblingSubtitle(localFile) }.getOrNull()
+            }
+            subtitleConfiguration = subtitleFile?.let {
+                buildSubtitleConfiguration(Uri.fromFile(it), it.extension)
+            }
         } else {
             val source = app.repository.getSource(loaded.sourceId) ?: return@LaunchedEffect
             val cifsContext = app.smbManager.authenticatedContext(source.id, source.toSmbConfig())
-            val dataSourceFactory = SmbDataSource.Factory(cifsContext)
-            val mediaItem = MediaItem.fromUri(Uri.parse(loaded.videoFilePath))
-            ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+            dataSourceFactory = SmbDataSource.Factory(cifsContext)
+            videoUri = Uri.parse(loaded.videoFilePath)
+            val subtitlePath = withTimeoutOrNull(3000) {
+                runCatching { app.smbManager.findSiblingSubtitle(source.id, source.toSmbConfig(), loaded.videoFilePath) }
+                    .getOrNull()
+            }
+            subtitleConfiguration = subtitlePath?.let { path ->
+                buildSubtitleConfiguration(Uri.parse(path), path.substringAfterLast('.', ""))
+            }
         }
+
+        // DefaultMediaSourceFactory rather than manually building
+        // ProgressiveMediaSource/SingleSampleMediaSource/MergingMediaSource - the latter
+        // produces subtitle samples in their raw sidecar format (text/vtt etc.), which recent
+        // Media3 versions refuse to render directly ("Legacy decoding is disabled, can't
+        // handle text/vtt samples") since legacy in-renderer subtitle decoding was disabled
+        // by default. DefaultMediaSourceFactory wires the modern SubtitleParser-based
+        // extraction pipeline correctly on its own.
+        val mediaItem = MediaItem.Builder()
+            .setUri(videoUri)
+            .apply { subtitleConfiguration?.let { setSubtitleConfigurations(listOf(it)) } }
+            .build()
+        val mediaSource = DefaultMediaSourceFactory(dataSourceFactory).createMediaSource(mediaItem)
 
         player = ExoPlayer.Builder(context).build().apply {
             setMediaSource(mediaSource)
@@ -292,44 +338,52 @@ fun PlayerScreen(itemId: String) {
         }
 
         Row(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
-            if (audioOptions.size > 1) {
+            // One combined settings menu rather than a separate always-on-screen icon per
+            // option - a standalone subtitle icon stuck around looking clickable even for a
+            // video with no subtitle track at all, which read as broken/stuck rather than
+            // "nothing to toggle here".
+            if (audioOptions.size > 1 || hasSubtitleTrack) {
                 Box {
-                    IconButton(onClick = { audioMenuOpen = true }) {
-                        Icon(Icons.Default.Audiotrack, contentDescription = "Аудиодорожка", tint = Color.White)
+                    IconButton(onClick = { playerSettingsMenuOpen = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Настройки воспроизведения", tint = Color.White)
                     }
-                    DropdownMenu(expanded = audioMenuOpen, onDismissRequest = { audioMenuOpen = false }) {
-                        audioOptions.forEach { option ->
+                    DropdownMenu(expanded = playerSettingsMenuOpen, onDismissRequest = { playerSettingsMenuOpen = false }) {
+                        if (hasSubtitleTrack) {
                             DropdownMenuItem(
-                                text = { Text(option.label) },
+                                text = { Text("Субтитры") },
                                 onClick = {
+                                    subtitlesEnabled = !subtitlesEnabled
                                     activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
                                         .buildUpon()
-                                        .setOverrideForType(TrackSelectionOverride(option.group.mediaTrackGroup, option.trackIndex))
+                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
                                         .build()
-                                    audioMenuOpen = false
+                                    playerSettingsMenuOpen = false
                                 },
-                                leadingIcon = { RadioButton(selected = option.selected, onClick = null) }
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (subtitlesEnabled) Icons.Default.ClosedCaption else Icons.Default.ClosedCaptionOff,
+                                        contentDescription = null
+                                    )
+                                }
                             )
                         }
+                        if (audioOptions.size > 1) {
+                            if (hasSubtitleTrack) HorizontalDivider()
+                            audioOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.label) },
+                                    onClick = {
+                                        activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
+                                            .buildUpon()
+                                            .setOverrideForType(TrackSelectionOverride(option.group.mediaTrackGroup, option.trackIndex))
+                                            .build()
+                                        playerSettingsMenuOpen = false
+                                    },
+                                    leadingIcon = { RadioButton(selected = option.selected, onClick = null) }
+                                )
+                            }
+                        }
                     }
-                }
-            }
-
-            if (hasSubtitleTrack) {
-                IconButton(
-                    onClick = {
-                        subtitlesEnabled = !subtitlesEnabled
-                        activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
-                            .buildUpon()
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
-                            .build()
-                    }
-                ) {
-                    Icon(
-                        imageVector = if (subtitlesEnabled) Icons.Default.ClosedCaption else Icons.Default.ClosedCaptionOff,
-                        contentDescription = "Субтитры",
-                        tint = Color.White
-                    )
                 }
             }
         }

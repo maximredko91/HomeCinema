@@ -176,6 +176,10 @@ class LibraryViewModel : ViewModel() {
 
     fun dismissUpdate(version: String) = app.dismissUpdate(version)
 
+    val rescanSuggested: StateFlow<Boolean> = app.rescanSuggested
+
+    fun dismissRescanSuggestion() = app.dismissRescanSuggestion()
+
     val searchHistory: StateFlow<List<String>> = app.settingsStore.searchHistoryFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

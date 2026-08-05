@@ -74,6 +74,8 @@ class LibraryRepository(
 
     fun observeContinueWatching(): Flow<List<MediaItemEntity>> = dao.observeContinueWatching()
 
+    fun observeWatchHistory(): Flow<List<MediaItemEntity>> = dao.observeWatchHistory()
+
     fun observeById(id: String): Flow<MediaItemEntity?> = dao.observeById(id)
 
     suspend fun getById(id: String): MediaItemEntity? = dao.getById(id)

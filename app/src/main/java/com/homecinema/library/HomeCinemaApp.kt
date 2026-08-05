@@ -59,6 +59,12 @@ class HomeCinemaApp : Application() {
      * been dismissed for that specific version yet - see checkForUpdate(). */
     val availableUpdate: StateFlow<ReleaseInfo?> = _availableUpdate.asStateFlow()
 
+    private val _rescanSuggested = MutableStateFlow(false)
+    /** True right after an app update, once - new versions often add .nfo fields (studio,
+     * mpaa, tagline, ...) that a library scanned under the old version never populated, so
+     * it's worth nudging the user to rescan. See checkForRescanSuggestion(). */
+    val rescanSuggested: StateFlow<Boolean> = _rescanSuggested.asStateFlow()
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -83,6 +89,7 @@ class HomeCinemaApp : Application() {
         createStreamingNotificationChannel()
         scheduleAutoRescan()
         checkForUpdate()
+        checkForRescanSuggestion()
 
         applicationScope.launch { repository.migrateLegacySourceIfNeeded(settingsStore) }
     }
@@ -105,6 +112,28 @@ class HomeCinemaApp : Application() {
     fun dismissUpdate(version: String) {
         applicationScope.launch { settingsStore.setDismissedUpdateVersion(version) }
         _availableUpdate.value = null
+    }
+
+    /** Compares this launch's versionCode against the last one recorded - a jump means the
+     * app was just updated. Only nags once: the new versionCode is recorded immediately, so
+     * a later launch on the same version (whether or not the user actually rescanned) won't
+     * show it again. A first-ever launch (lastSeen == 0) never triggers this - a fresh
+     * install has no stale pre-update data to worry about. */
+    private fun checkForRescanSuggestion() {
+        applicationScope.launch {
+            val currentVersionCode = runCatching {
+                packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+            }.getOrNull() ?: return@launch
+            val lastSeen = settingsStore.lastSeenVersionCodeFlow.first()
+            if (lastSeen != 0 && lastSeen < currentVersionCode) {
+                _rescanSuggested.value = true
+            }
+            settingsStore.setLastSeenVersionCode(currentVersionCode)
+        }
+    }
+
+    fun dismissRescanSuggestion() {
+        _rescanSuggested.value = false
     }
 
     private fun createDownloadNotificationChannel() {

@@ -11,6 +11,7 @@ import androidx.work.workDataOf
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.db.SmbSourceEntity
 import com.homecinema.library.data.smb.SmbRandomAccessInputStream
 import com.homecinema.library.data.smb.toSmbConfig
 import jcifs.smb.SmbException
@@ -111,6 +112,30 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
         }
 
         dao.updateDownloadResult(item.id, DownloadState.COMPLETED, 100, destFile.absolutePath)
+
+        downloadSubtitleIfAny(app, item, source, destFile)
+    }
+
+    /** Best-effort: a sidecar subtitle is small and secondary to the video itself, so any
+     * failure here (not found, share hiccup) is swallowed rather than failing the whole
+     * download or burning through the retry budget. Named to match [destFile]'s base name
+     * (itemId, not the original filename) so findLocalSiblingSubtitle can find it later. */
+    private suspend fun downloadSubtitleIfAny(
+        app: HomeCinemaApp,
+        item: MediaItemEntity,
+        source: SmbSourceEntity,
+        destFile: File
+    ) {
+        runCatching {
+            val subtitlePath = app.smbManager.findSiblingSubtitle(source.id, source.toSmbConfig(), item.videoFilePath)
+                ?: return@runCatching
+            val subtitleExtension = subtitlePath.substringAfterLast('.', "")
+            val subtitleFile = File(destFile.parentFile, "${item.id}.$subtitleExtension")
+            val smbSubtitleFile = app.smbManager.openFile(source.id, source.toSmbConfig(), subtitlePath)
+            smbSubtitleFile.inputStream.use { input ->
+                FileOutputStream(subtitleFile).use { output -> input.copyTo(output) }
+            }
+        }
     }
 
     private fun openResumableInput(smbFile: SmbFile, offset: Long): InputStream =

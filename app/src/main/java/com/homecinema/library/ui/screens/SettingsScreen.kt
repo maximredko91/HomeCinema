@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.SmbSourceEntity
+import com.homecinema.library.data.media.queryExternalPlayerApps
 import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.settings.SmbConfig
 import com.homecinema.library.data.settings.ThemeMode
@@ -224,8 +225,11 @@ fun LibrarySettingsScreen(onBack: () -> Unit) {
 @Composable
 fun PlaybackSettingsScreen(onBack: () -> Unit) {
     val app = HomeCinemaApp.instance
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val playbackMode by app.settingsStore.playbackModeFlow.collectAsState(initial = PlaybackMode.ASK)
+    val preferredExternalPlayer by app.settingsStore.preferredExternalPlayerPackageFlow.collectAsState(initial = "")
+    val externalPlayerApps = remember { queryExternalPlayerApps(context) }
 
     SettingsSubScreenScaffold(title = "Воспроизведение видео", onBack = onBack) {
         Column(Modifier.selectableGroup()) {
@@ -235,6 +239,36 @@ fun PlaybackSettingsScreen(onBack: () -> Unit) {
                     selected = playbackMode == mode,
                     onSelect = { scope.launch { app.settingsStore.savePlaybackMode(mode) } }
                 )
+            }
+        }
+
+        AnimatedVisibility(visible = playbackMode != PlaybackMode.INTERNAL) {
+            Column {
+                Spacer(Modifier.height(16.dp))
+                Text("Внешний плеер", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Какое приложение открывать для внешнего воспроизведения",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Spacer(Modifier.height(8.dp))
+                Column(Modifier.selectableGroup()) {
+                    RadioOption(
+                        label = "Всегда спрашивать",
+                        selected = preferredExternalPlayer.isBlank(),
+                        onSelect = { scope.launch { app.settingsStore.savePreferredExternalPlayerPackage("") } }
+                    )
+                    externalPlayerApps.forEach { playerApp ->
+                        RadioOption(
+                            label = playerApp.label,
+                            selected = preferredExternalPlayer == playerApp.packageName,
+                            onSelect = {
+                                scope.launch { app.settingsStore.savePreferredExternalPlayerPackage(playerApp.packageName) }
+                            }
+                        )
+                    }
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.homecinema.library.data.streaming
 
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.data.media.subtitleMimeType
 import com.homecinema.library.data.smb.SmbRandomAccessInputStream
 import com.homecinema.library.data.smb.toSmbConfig
 import fi.iki.elonen.NanoHTTPD
@@ -9,6 +10,7 @@ import jcifs.smb.SmbRandomAccessFile
 import kotlinx.coroutines.runBlocking
 
 private const val STREAM_PATH_PREFIX = "/stream/"
+private const val SUBTITLE_PATH_PREFIX = "/subtitle/"
 
 /**
  * Loopback-only HTTP server that re-exposes a single library item's SMB file as
@@ -33,19 +35,37 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
-        if (!uri.startsWith(STREAM_PATH_PREFIX)) {
-            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
+        return when {
+            uri.startsWith(STREAM_PATH_PREFIX) -> serveVideo(session, uri.removePrefix(STREAM_PATH_PREFIX))
+            uri.startsWith(SUBTITLE_PATH_PREFIX) -> serveSubtitle(uri.removePrefix(SUBTITLE_PATH_PREFIX))
+            else -> newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
         }
-        val itemId = uri.removePrefix(STREAM_PATH_PREFIX)
-        if (itemId.isBlank()) {
-            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
-        }
+    }
+
+    private fun serveVideo(session: IHTTPSession, itemId: String): Response {
+        if (itemId.isBlank()) return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
 
         val resolved = runCatching { resolveSmbFile(itemId) }.getOrNull()
             ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
 
         return runCatching { serveFile(session, resolved.first, resolved.second) }
             .getOrElse { newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", it.message ?: "Error") }
+    }
+
+    /** Used by external players that don't discover a sidecar subtitle on their own (they
+     * only ever see this single flat streaming URL, no folder to browse) - see
+     * DetailScreen.playExternally for how the URL gets passed on. Small file, no Range
+     * support needed unlike the video route. */
+    private fun serveSubtitle(itemId: String): Response {
+        if (itemId.isBlank()) return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
+
+        val resolved = runCatching { resolveSubtitleFile(itemId) }.getOrNull()
+            ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
+        val (smbFile, extension) = resolved
+
+        return runCatching {
+            newFixedLengthResponse(Response.Status.OK, subtitleMimeType(extension), smbFile.inputStream, smbFile.length())
+        }.getOrElse { newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", it.message ?: "Error") }
     }
 
     /** Suspend calls (Room + SmbSourceResolver) bridged to blocking - NanoHTTPD dispatches each
@@ -56,6 +76,16 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
         val source = app.sourceResolver.resolve(item.sourceId) ?: return@runBlocking null
         val smbFile = app.smbManager.openFile(source.id, source.toSmbConfig(), item.videoFilePath)
         smbFile to item.videoFilePath
+    }
+
+    private fun resolveSubtitleFile(itemId: String): Pair<SmbFile, String>? = runBlocking {
+        val app = HomeCinemaApp.instance
+        val item = app.database.libraryDao().getById(itemId) ?: return@runBlocking null
+        val source = app.sourceResolver.resolve(item.sourceId) ?: return@runBlocking null
+        val config = source.toSmbConfig()
+        val subtitlePath = app.smbManager.findSiblingSubtitle(source.id, config, item.videoFilePath) ?: return@runBlocking null
+        val smbFile = app.smbManager.openFile(source.id, config, subtitlePath)
+        smbFile to subtitlePath.substringAfterLast('.', "")
     }
 
     private fun serveFile(session: IHTTPSession, smbFile: SmbFile, path: String): Response {

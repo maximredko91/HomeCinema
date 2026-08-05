@@ -70,6 +70,15 @@ interface LibraryDao {
     )
     fun observeContinueWatching(): Flow<List<MediaItemEntity>>
 
+    // Everything ever played, most recent first - unlike observeContinueWatching this
+    // includes finished titles too (no durationMs/position filtering), for a dedicated
+    // "История просмотров" screen rather than the library's "continue watching" row.
+    @Query(
+        "SELECT * FROM media_items WHERE mediaType != 'TV_SHOW' AND mediaType != 'CARTOON_SERIES' " +
+            "AND lastPlayedAt > 0 ORDER BY lastPlayedAt DESC LIMIT 200"
+    )
+    fun observeWatchHistory(): Flow<List<MediaItemEntity>>
+
     @Query("UPDATE media_items SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun setFavorite(id: String, isFavorite: Boolean)
 

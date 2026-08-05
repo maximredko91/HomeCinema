@@ -93,6 +93,7 @@ fun LibraryScreen(
     onOpenDetail: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenHistory: () -> Unit,
     onPlayItem: (String) -> Unit,
     viewModel: LibraryViewModel = viewModel()
 ) {
@@ -113,6 +114,7 @@ fun LibraryScreen(
     val gridColumns by viewModel.gridColumns.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
     val availableUpdate by viewModel.availableUpdate.collectAsState()
+    val rescanSuggested by viewModel.rescanSuggested.collectAsState()
     val categoryCounts by viewModel.categoryCounts.collectAsState()
     val customLists by viewModel.customLists.collectAsState()
     val listCounts by viewModel.listCounts.collectAsState()
@@ -260,6 +262,9 @@ fun LibraryScreen(
                         IconButton(onClick = onOpenDownloads) {
                             Icon(Icons.Default.Download, contentDescription = "Загрузки")
                         }
+                        IconButton(onClick = onOpenHistory) {
+                            Icon(Icons.Default.History, contentDescription = "История просмотров")
+                        }
                         IconButton(onClick = { viewModel.rescan() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Сканировать библиотеку")
                         }
@@ -310,6 +315,12 @@ fun LibraryScreen(
                         onDismiss = { viewModel.dismissUpdate(release.version) }
                     )
                 }
+                if (rescanSuggested) {
+                    RescanSuggestedBanner(
+                        onRescan = { viewModel.dismissRescanSuggestion(); viewModel.rescan() },
+                        onDismiss = viewModel::dismissRescanSuggestion
+                    )
+                }
                 if (selectedCollection == null && continueWatching.isNotEmpty()) {
                     ContinueWatchingRow(items = continueWatching, onClick = onPlayItem, onDismiss = viewModel::dismissContinueWatching)
                 }
@@ -339,7 +350,11 @@ fun LibraryScreen(
                             filter = filter,
                             query = query,
                             sortOrder = sortOrder,
-                            alphabetIndexEnabled = alphabetIndexEnabled,
+                            // Only show the alphabet bar once settled on this page - during a
+                            // swipe HorizontalPager keeps neighboring pages composed so the
+                            // transition can be followed, which otherwise let the bar's edge
+                            // show through over the Collections/Lists page mid-drag.
+                            alphabetIndexEnabled = alphabetIndexEnabled && !pagerState.isScrollInProgress,
                             gridColumns = gridColumns,
                             onOpenDetail = onOpenDetail,
                             onOpenSettings = onOpenSettings,
@@ -447,6 +462,13 @@ private fun LibraryGrid(
     val sortedLetterEntries = remember(letterIndex) { letterIndex.entries.sortedBy { it.value } }
     val currentScrollLetter by remember(sortedLetterEntries) {
         derivedStateOf {
+            // Bail out before reading firstVisibleItemIndex while actively scrolling (drag or
+            // fling) - that index changes on essentially every frame during a fling, and since
+            // derivedStateOf only re-subscribes to whatever it actually reads, skipping the
+            // read here means this block stops recomputing on every one of those frames,
+            // rather than doing (and mostly discarding) that work continuously through the
+            // whole scroll gesture.
+            if (gridState.isScrollInProgress) return@derivedStateOf null
             val visibleIndex = gridState.firstVisibleItemIndex
             sortedLetterEntries.lastOrNull { it.value <= visibleIndex }?.key
         }
@@ -1285,6 +1307,35 @@ private fun UpdateAvailableBanner(
 
     if (dialogOpen) {
         UpdateDialog(release = release, onDismiss = { dialogOpen = false })
+    }
+}
+
+/** Nudges the user to rescan right after an app update that may have added new .nfo fields
+ * (studio, mpaa, tagline, ...) an older scan never picked up - see
+ * HomeCinemaApp.checkForRescanSuggestion for the one-time-per-version trigger logic. */
+@Composable
+private fun RescanSuggestedBanner(
+    onRescan: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(16.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        tonalElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Новая версия могла добавить новые данные — пересканировать библиотеку?",
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onRescan) { Text("Сканировать") }
+            TextButton(onClick = onDismiss) { Text("Позже") }
+        }
     }
 }
 

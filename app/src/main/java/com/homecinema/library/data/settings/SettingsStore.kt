@@ -55,6 +55,8 @@ class SettingsStore(private val context: Context) {
         val GLASS_BACKGROUND_COLOR = stringPreferencesKey("glass_background_color")
         val GLASS_OPACITY = intPreferencesKey("glass_opacity")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
+        val LAST_SEEN_VERSION_CODE = intPreferencesKey("last_seen_version_code")
+        val PREFERRED_EXTERNAL_PLAYER_PACKAGE = stringPreferencesKey("preferred_external_player_package")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -223,6 +225,33 @@ class SettingsStore(private val context: Context) {
 
     suspend fun clearSearchHistory() {
         context.dataStore.edit { prefs -> prefs.remove(Keys.SEARCH_HISTORY) }
+    }
+
+    /** The app's own versionCode as of the last launch that checked - lets HomeCinemaApp tell
+     * "just updated" apart from "same version as last time", to offer a one-time rescan prompt
+     * when a new version adds .nfo fields that older scans never populated. 0 means never
+     * recorded (fresh install - no stale data to worry about, so no prompt is needed then). */
+    val lastSeenVersionCodeFlow: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LAST_SEEN_VERSION_CODE] ?: 0
+    }
+
+    suspend fun setLastSeenVersionCode(code: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LAST_SEEN_VERSION_CODE] = code
+        }
+    }
+
+    /** Package name of the app external playback should always launch, or "" to let Android
+     * show its own chooser (or auto-pick a sole/previously-set default) every time - see
+     * data.media.queryExternalPlayerApps for how the picker's option list is built. */
+    val preferredExternalPlayerPackageFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.PREFERRED_EXTERNAL_PLAYER_PACKAGE] ?: ""
+    }
+
+    suspend fun savePreferredExternalPlayerPackage(packageName: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.PREFERRED_EXTERNAL_PLAYER_PACKAGE] = packageName
+        }
     }
 
     private fun parseSearchHistory(raw: String?): List<String> {

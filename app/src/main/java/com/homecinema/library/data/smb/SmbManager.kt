@@ -1,6 +1,7 @@
 package com.homecinema.library.data.smb
 
 import com.homecinema.library.data.db.SmbSourceEntity
+import com.homecinema.library.data.media.SUBTITLE_EXTENSIONS
 import com.homecinema.library.data.settings.SmbConfig
 import jcifs.CIFSContext
 import jcifs.config.PropertyConfiguration
@@ -134,6 +135,33 @@ class SmbManager {
                 }
             }.awaitAll()
         }
+    }
+
+    /** Lists just one folder's direct children (no recursion) - used to look for a sibling
+     * subtitle file next to a video without paying for a full-tree walk. */
+    suspend fun listFolder(sourceId: String, config: SmbConfig, folderPath: String): List<SmbFile> =
+        withContext(Dispatchers.IO) {
+            runCatching { SmbFile(folderPath, contextFor(sourceId, config)).listFiles()?.toList() }
+                .getOrNull().orEmpty()
+        }
+
+    /** Full smb:// path of a subtitle file sitting next to [videoPath] with the same base name
+     * (e.g. "Movie.mkv" + "Movie.srt"), or null if none of the common subtitle extensions
+     * matches anything in that folder. Case-insensitive on both the base name and extension,
+     * since real-world release naming is inconsistent about casing. */
+    suspend fun findSiblingSubtitle(sourceId: String, config: SmbConfig, videoPath: String): String? {
+        val parentPath = videoPath.substringBeforeLast('/') + "/"
+        val videoBaseName = videoPath.substringAfterLast('/').substringBeforeLast('.')
+        // Matching purely on name/extension (no child.isDirectory check) - that's itself a
+        // blocking SMB stat call per file that can throw on a flaky share, and a directory
+        // that happens to be named like a subtitle file is not a real-world concern worth
+        // that cost/risk for what's meant to be a lightweight, best-effort lookup.
+        return runCatching {
+            listFolder(sourceId, config, parentPath).firstOrNull { child ->
+                child.name.substringBeforeLast('.').equals(videoBaseName, ignoreCase = true) &&
+                    child.name.substringAfterLast('.', "").lowercase() in SUBTITLE_EXTENSIONS
+            }?.path
+        }.getOrNull()
     }
 
     /** Drops cached connections so edited/removed sources reconnect with fresh credentials. */

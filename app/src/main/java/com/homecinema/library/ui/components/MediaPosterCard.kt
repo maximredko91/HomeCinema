@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
@@ -134,17 +132,23 @@ fun MediaPosterCard(
 
         Spacer(Modifier.height(8.dp))
 
-        // Auto-shrinks down to minFontSize before falling back to ellipsis, so a long
-        // title stays fully readable at 3 grid columns instead of always clipping to
-        // whatever fit at the original titleMedium size.
-        val titleColor = MaterialTheme.colorScheme.onBackground
-        BasicText(
+        // A cheap length-based step-down rather than true auto-fit (BasicText's
+        // TextAutoSize) - that ran its multi-pass measurement search fresh for every card
+        // as it scrolled into view in the grid (item recomposition/reuse), which was
+        // expensive enough to visibly jank/stutter the scroll itself. This is O(1) per card
+        // and still keeps a long title readable at 3 columns instead of just truncating at
+        // a single fixed size.
+        val titleFontSize = when {
+            item.title.length > 40 -> 12.sp
+            item.title.length > 25 -> 14.sp
+            else -> 16.sp
+        }
+        Text(
             text = item.title,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = titleFontSize, fontWeight = FontWeight.SemiBold),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 16.sp),
-            color = { titleColor }
+            color = MaterialTheme.colorScheme.onBackground
         )
 
         val subtitle = buildList {
