@@ -49,6 +49,8 @@ class SettingsStore(private val context: Context) {
         val LAST_AUTO_SCAN_AT = longPreferencesKey("last_auto_scan_at")
         val GRID_COLUMNS = intPreferencesKey("grid_columns")
         val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
+        val GLASS_BACKGROUND_COLOR = stringPreferencesKey("glass_background_color")
+        val GLASS_OPACITY = intPreferencesKey("glass_opacity")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -161,6 +163,30 @@ class SettingsStore(private val context: Context) {
     suspend fun setGridColumns(columns: Int) {
         context.dataStore.edit { prefs ->
             prefs[Keys.GRID_COLUMNS] = columns.coerceIn(2, 3)
+        }
+    }
+
+    /** Stored as a plain string key, same reasoning as [accentColorNameFlow] -
+     * ui.theme.GlassBackgroundColor owns the actual colors. */
+    val glassBackgroundColorNameFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.GLASS_BACKGROUND_COLOR] ?: "INDIGO"
+    }
+
+    suspend fun saveGlassBackgroundColorName(name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.GLASS_BACKGROUND_COLOR] = name
+        }
+    }
+
+    /** How opaque the "Стекло" theme's blurred panels are, 40-95% - higher reads more clearly
+     * (less of the blurred backdrop bleeding through text/icons) but looks less like glass. */
+    val glassOpacityFlow: Flow<Int> = context.dataStore.data.map { prefs ->
+        (prefs[Keys.GLASS_OPACITY] ?: 65).coerceIn(40, 95)
+    }
+
+    suspend fun setGlassOpacity(percent: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.GLASS_OPACITY] = percent.coerceIn(40, 95)
         }
     }
 }

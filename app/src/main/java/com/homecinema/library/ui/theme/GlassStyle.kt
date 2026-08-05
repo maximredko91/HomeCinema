@@ -18,10 +18,10 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
  * "Стекло" panel look: real backdrop blur via Haze (blurs whatever actually renders behind
@@ -62,15 +62,27 @@ fun Modifier.glassBackdrop(): Modifier {
  * light-catching edge that already read well on the old flat approximation and still does
  * layered on top of real blur. [shape] should match whatever shape the surface is already
  * clipped to (rounded corners for a card, none for a full-width top bar) so the blur and
- * border don't bleed past it. No-op outside glass theme. */
-@OptIn(ExperimentalHazeMaterialsApi::class)
+ * border don't bleed past it. No-op outside glass theme.
+ *
+ * Builds its own [HazeStyle] (rather than one of Haze's fixed `HazeMaterials` presets) so the
+ * tint opacity tracks [LocalGlassOpacity] - the presets' opacity was too low by default for
+ * icons/text to read clearly on top of a busy blurred backdrop. */
 @Composable
 fun Modifier.glassEffect(shape: Shape = RectangleShape): Modifier {
     val state = LocalGlassHazeState.current
     return if (LocalIsGlassTheme.current && state != null) {
+        val surfaceColor = LocalGlassBackgroundColor.current.surface
+        val opacity = LocalGlassOpacity.current
         this
             .clip(shape)
-            .hazeEffect(state = state, style = HazeMaterials.thin(containerColor = GlassSurface))
+            .hazeEffect(
+                state = state,
+                style = HazeStyle(
+                    backgroundColor = surfaceColor,
+                    tints = listOf(HazeTint(surfaceColor.copy(alpha = opacity))),
+                    blurRadius = 24.dp
+                )
+            )
             .border(1.dp, glassBorderBrush, shape)
     } else {
         this
@@ -113,4 +125,8 @@ val glassContainerColor: Color
  * Use this only via ModalBottomSheet's `containerColor` param, never via its `modifier`. */
 val glassSheetContainerColor: Color
     @Composable
-    get() = if (LocalIsGlassTheme.current) GlassSurface.copy(alpha = 0.94f) else MaterialTheme.colorScheme.surface
+    get() = if (LocalIsGlassTheme.current) {
+        LocalGlassBackgroundColor.current.surface.copy(alpha = 0.94f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }

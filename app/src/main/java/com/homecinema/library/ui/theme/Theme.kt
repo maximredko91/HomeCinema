@@ -21,16 +21,22 @@ fun resolveDarkTheme(mode: ThemeMode, systemInDarkTheme: Boolean): Boolean = whe
 /** The exact background color HomeCinemaTheme resolves to for [mode], for painting the
  * system status/navigation bars to match instead of leaving them their OS default (often
  * a stark white that clashes with a dark theme). */
-fun backgroundColorFor(mode: ThemeMode, systemInDarkTheme: Boolean): Color = when {
+fun backgroundColorFor(mode: ThemeMode, systemInDarkTheme: Boolean, glassBackground: GlassBackgroundColor): Color = when {
     !resolveDarkTheme(mode, systemInDarkTheme) -> LightBackground
     mode == ThemeMode.OLED -> OledBackground
-    mode == ThemeMode.GLASS -> GlassBackground
+    mode == ThemeMode.GLASS -> glassBackground.background
     else -> CinemaBackground
 }
 
 /** Whether the "Стекло" style is active - read by chrome surfaces (bars, sheets, cards)
  * that render a translucent/glass look instead of a flat Material surface when true. */
 val LocalIsGlassTheme = staticCompositionLocalOf { false }
+
+/** The user-selected "Стекло" background preset and blur-panel opacity, read ambiently by
+ * [glassEffect]/[glassSheetContainerColor] instead of threading them through every screen -
+ * same reasoning as [LocalGlassHazeState]. */
+val LocalGlassBackgroundColor = staticCompositionLocalOf { GlassBackgroundColor.INDIGO }
+val LocalGlassOpacity = staticCompositionLocalOf { 0.65f }
 
 private fun onColorFor(background: Color): Color =
     if (background.luminance() > 0.5f) Color.Black else Color.White
@@ -39,6 +45,8 @@ private fun onColorFor(background: Color): Color =
 fun HomeCinemaTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     accent: AccentColor = AccentColor.GOLD,
+    glassBackground: GlassBackgroundColor = GlassBackgroundColor.INDIGO,
+    glassOpacityPercent: Int = 65,
     content: @Composable () -> Unit
 ) {
     val isDark = resolveDarkTheme(themeMode, isSystemInDarkTheme())
@@ -47,7 +55,7 @@ fun HomeCinemaTheme(
     val colorScheme = if (isDark) {
         val (bg, surface, surfaceVariant) = when (themeMode) {
             ThemeMode.OLED -> Triple(OledBackground, OledSurface, OledSurfaceVariant)
-            ThemeMode.GLASS -> Triple(GlassBackground, GlassSurface, GlassSurfaceVariant)
+            ThemeMode.GLASS -> Triple(glassBackground.background, glassBackground.surface, glassBackground.surfaceVariant)
             else -> Triple(CinemaBackground, CinemaSurface, CinemaSurfaceVariant)
         }
         darkColorScheme(
@@ -74,7 +82,11 @@ fun HomeCinemaTheme(
         )
     }
 
-    CompositionLocalProvider(LocalIsGlassTheme provides (themeMode == ThemeMode.GLASS)) {
+    CompositionLocalProvider(
+        LocalIsGlassTheme provides (themeMode == ThemeMode.GLASS),
+        LocalGlassBackgroundColor provides glassBackground,
+        LocalGlassOpacity provides (glassOpacityPercent.coerceIn(40, 95) / 100f)
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = CinemaTypography,

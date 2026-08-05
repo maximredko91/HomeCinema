@@ -22,6 +22,7 @@ import androidx.core.view.WindowCompat
 import com.homecinema.library.data.settings.ThemeMode
 import com.homecinema.library.ui.navigation.AppNavHost
 import com.homecinema.library.ui.theme.AccentColor
+import com.homecinema.library.ui.theme.GlassBackgroundColor
 import com.homecinema.library.ui.theme.HomeCinemaTheme
 import com.homecinema.library.ui.theme.backgroundColorFor
 import com.homecinema.library.ui.theme.resolveDarkTheme
@@ -55,9 +56,12 @@ private fun HomeCinemaRoot() {
     val themeMode by app.settingsStore.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
     val accentName by app.settingsStore.accentColorNameFlow.collectAsState(initial = "GOLD")
     val accent = AccentColor.fromName(accentName)
+    val glassBackgroundName by app.settingsStore.glassBackgroundColorNameFlow.collectAsState(initial = "INDIGO")
+    val glassBackground = GlassBackgroundColor.fromName(glassBackgroundName)
+    val glassOpacity by app.settingsStore.glassOpacityFlow.collectAsState(initial = 65)
     val systemInDarkTheme = isSystemInDarkTheme()
     val isDark = resolveDarkTheme(themeMode, systemInDarkTheme)
-    val barColor = backgroundColorFor(themeMode, systemInDarkTheme).toArgb()
+    val barColor = backgroundColorFor(themeMode, systemInDarkTheme, glassBackground).toArgb()
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -75,7 +79,12 @@ private fun HomeCinemaRoot() {
         }
     }
 
-    HomeCinemaTheme(themeMode = themeMode, accent = accent) {
+    HomeCinemaTheme(
+        themeMode = themeMode,
+        accent = accent,
+        glassBackground = glassBackground,
+        glassOpacityPercent = glassOpacity
+    ) {
         Surface(modifier = Modifier.fillMaxSize()) {
             AppNavHost()
         }

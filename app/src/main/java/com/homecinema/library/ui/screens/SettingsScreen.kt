@@ -55,6 +55,7 @@ import com.homecinema.library.data.smb.toSmbUserMessage
 import com.homecinema.library.data.update.ReleaseNote
 import com.homecinema.library.data.update.UpdateChecker
 import com.homecinema.library.ui.theme.AccentColor
+import com.homecinema.library.ui.theme.GlassBackgroundColor
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
@@ -74,6 +75,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     val alphabetIndexEnabled by app.settingsStore.alphabetIndexEnabledFlow.collectAsState(initial = true)
     val themeMode by app.settingsStore.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
     val accentName by app.settingsStore.accentColorNameFlow.collectAsState(initial = "GOLD")
+    val glassBackgroundName by app.settingsStore.glassBackgroundColorNameFlow.collectAsState(initial = "INDIGO")
+    val glassOpacity by app.settingsStore.glassOpacityFlow.collectAsState(initial = 65)
     val autoRescanEnabled by app.settingsStore.autoRescanEnabledFlow.collectAsState(initial = true)
     val gridColumns by app.settingsStore.gridColumnsFlow.collectAsState(initial = 2)
     var clearingCache by remember { mutableStateOf(false) }
@@ -176,6 +179,37 @@ fun SettingsScreen(onBack: () -> Unit) {
                         selected = themeMode == ThemeMode.GLASS,
                         onSelect = { scope.launch { app.settingsStore.saveThemeMode(ThemeMode.GLASS) } }
                     )
+                }
+
+                AnimatedVisibility(visible = themeMode == ThemeMode.GLASS) {
+                    Column {
+                        Spacer(Modifier.height(16.dp))
+                        Text("Цвет фона «Стекла»", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            GlassBackgroundColor.entries.forEach { preset ->
+                                GlassBackgroundSwatch(
+                                    preset = preset,
+                                    selected = preset.name == glassBackgroundName,
+                                    onClick = { scope.launch { app.settingsStore.saveGlassBackgroundColorName(preset.name) } }
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+                        Text("Непрозрачность стекла: $glassOpacity%", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Выше — панели читаются чётче, ниже — сильнее эффект прозрачного стекла",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Slider(
+                            value = glassOpacity.toFloat(),
+                            onValueChange = { scope.launch { app.settingsStore.setGlassOpacity(it.toInt()) } },
+                            valueRange = 40f..95f,
+                            steps = 10
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -570,6 +604,31 @@ private fun AccentSwatch(accent: AccentColor, selected: Boolean, onClick: () -> 
                 Icons.Default.Check,
                 contentDescription = accent.label,
                 tint = if (accent.color.luminance() > 0.5f) Color.Black else Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun GlassBackgroundSwatch(preset: GlassBackgroundColor, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(preset.surface)
+            .then(
+                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.onBackground, CircleShape)
+                else Modifier
+            )
+            .clickable(onClickLabel = preset.label, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = preset.label,
+                tint = if (preset.surface.luminance() > 0.5f) Color.Black else Color.White,
                 modifier = Modifier.size(18.dp)
             )
         }

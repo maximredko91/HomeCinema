@@ -30,11 +30,20 @@ class ThemeTest {
 
     @Test
     fun `background color matches the resolved mode`() {
-        assertEquals(LightBackground, backgroundColorFor(ThemeMode.LIGHT, systemInDarkTheme = true))
-        assertEquals(CinemaBackground, backgroundColorFor(ThemeMode.DARK, systemInDarkTheme = false))
-        assertEquals(OledBackground, backgroundColorFor(ThemeMode.OLED, systemInDarkTheme = false))
-        assertEquals(CinemaBackground, backgroundColorFor(ThemeMode.SYSTEM, systemInDarkTheme = true))
-        assertEquals(LightBackground, backgroundColorFor(ThemeMode.SYSTEM, systemInDarkTheme = false))
+        val glass = GlassBackgroundColor.INDIGO
+        assertEquals(LightBackground, backgroundColorFor(ThemeMode.LIGHT, systemInDarkTheme = true, glassBackground = glass))
+        assertEquals(CinemaBackground, backgroundColorFor(ThemeMode.DARK, systemInDarkTheme = false, glassBackground = glass))
+        assertEquals(OledBackground, backgroundColorFor(ThemeMode.OLED, systemInDarkTheme = false, glassBackground = glass))
+        assertEquals(CinemaBackground, backgroundColorFor(ThemeMode.SYSTEM, systemInDarkTheme = true, glassBackground = glass))
+        assertEquals(LightBackground, backgroundColorFor(ThemeMode.SYSTEM, systemInDarkTheme = false, glassBackground = glass))
+    }
+
+    @Test
+    fun `glass theme background color follows the selected preset`() {
+        assertEquals(
+            GlassBackgroundColor.EMERALD.background,
+            backgroundColorFor(ThemeMode.GLASS, systemInDarkTheme = false, glassBackground = GlassBackgroundColor.EMERALD)
+        )
     }
 
     @Test
@@ -42,5 +51,12 @@ class ThemeTest {
         assertEquals(AccentColor.GOLD, AccentColor.fromName("unknown"))
         assertEquals(AccentColor.GOLD, AccentColor.fromName(""))
         assertEquals(AccentColor.BLUE, AccentColor.fromName("BLUE"))
+    }
+
+    @Test
+    fun `glass background color lookup falls back to indigo for an unknown or blank name`() {
+        assertEquals(GlassBackgroundColor.INDIGO, GlassBackgroundColor.fromName("unknown"))
+        assertEquals(GlassBackgroundColor.INDIGO, GlassBackgroundColor.fromName(""))
+        assertEquals(GlassBackgroundColor.EMERALD, GlassBackgroundColor.fromName("EMERALD"))
     }
 }
