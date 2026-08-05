@@ -9,6 +9,15 @@ package com.homecinema.library.data.update
  */
 val LOCAL_CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "1.10.01",
+        name = "v1.10.01",
+        publishedAt = "2026-08-05",
+        body = "История изменений теперь работает без интернета — раньше список версий " +
+            "загружался с GitHub и был недоступен офлайн. Каждая версия теперь " +
+            "сворачивается, чтобы список не растягивался слишком длинно.\n\n" +
+            "Кружки выбора цвета фона темы «Стекло» стали ярче и заметнее."
+    ),
+    ReleaseNote(
         version = "1.10",
         name = "v1.10",
         publishedAt = "2026-08-05",
