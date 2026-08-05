@@ -9,6 +9,16 @@ package com.homecinema.library.data.update
  */
 val LOCAL_CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "1.11",
+        name = "v1.11",
+        publishedAt = "2026-08-05",
+        body = "Поиск по тегам теперь понимает русский язык. Значения тега <tag> из .nfo " +
+            "почти всегда на английском (heist, pirates и т.д.) — теперь можно писать " +
+            "«#ограбление» или «#пираты» по-русски, слово незаметно переводится и " +
+            "сопоставляется с английскими тегами в фоне, без каких-либо изменений в " +
+            "самом запросе."
+    ),
+    ReleaseNote(
         version = "1.10.01",
         name = "v1.10.01",
         publishedAt = "2026-08-05",

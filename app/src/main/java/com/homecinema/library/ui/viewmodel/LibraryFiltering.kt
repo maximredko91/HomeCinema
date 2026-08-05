@@ -1,6 +1,7 @@
 package com.homecinema.library.ui.viewmodel
 
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.search.matchesTagQuery
 
 /**
  * Pure filter/search/sort pipeline for the library grid - extracted out of
@@ -24,10 +25,10 @@ fun applyLibraryFilters(
         if (query.startsWith("#")) {
             // "#пираты" - explicit tag search, matches only against .nfo <tag> keywords
             // (a separate, free-form field from <genre>) rather than the usual text fields.
+            // .nfo tags are always in English (TMDb-scraped), so a Russian query is translated
+            // word-by-word against RU_EN_TAG_DICTIONARY before matching - see matchesTagQuery.
             val tagQuery = query.removePrefix("#").trim()
-            result = result.filter { item ->
-                item.tags.split(",").map { it.trim() }.any { it.contains(tagQuery, ignoreCase = true) }
-            }
+            result = result.filter { item -> matchesTagQuery(item.tags, tagQuery) }
         } else {
             result = result.filter { item ->
                 item.title.contains(query, ignoreCase = true) ||

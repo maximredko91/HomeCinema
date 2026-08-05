@@ -62,6 +62,14 @@ class LibraryFilteringTest {
     )
     private val itemsWithPirates = allItems + pirates
 
+    // Real .nfo <tag> values are always in English (TMDb-scraped) - this fixture is what an
+    // actual scanned library looks like, as opposed to pirates' Russian tags above (kept for
+    // the "raw query already matches" fallback path).
+    private val heist = item(
+        "6", "Хитрецы", year = 2010, genres = "Криминал",
+        tags = "heist, robbery, prison escape"
+    )
+
     @Test
     fun `filters by media type`() {
         val result = applyLibraryFilters(allItems, LibraryFilter.TV_SHOWS, "", SortOrder.TITLE)
@@ -177,6 +185,33 @@ class LibraryFilteringTest {
         // "Рояль" is right there in bond2006's title, but it's not one of its tags - a
         // #-prefixed query must not fall back to matching title/plot/actors/director.
         val result = applyLibraryFilters(itemsWithPirates, LibraryFilter.ALL, "#рояль", SortOrder.TITLE)
+        assertEquals(emptyList<MediaItemEntity>(), result)
+    }
+
+    @Test
+    fun `hashtag query in Russian matches an English nfo tag via translation`() {
+        val result = applyLibraryFilters(listOf(heist), LibraryFilter.ALL, "#ограбление", SortOrder.TITLE)
+        assertEquals(listOf(heist), result)
+    }
+
+    @Test
+    fun `multi-word Russian hashtag query requires every word to match the same tag`() {
+        // "prison escape" is one tag - both translated words must land on it together.
+        val result = applyLibraryFilters(listOf(heist), LibraryFilter.ALL, "#тюрьма побег", SortOrder.TITLE)
+        assertEquals(listOf(heist), result)
+    }
+
+    @Test
+    fun `multi-word Russian hashtag query fails if the words match different tags`() {
+        // "тюрьма" (prison) and "сокровища" (treasure) - "treasure" isn't one of heist's tags,
+        // so this must not match even though "тюрьма" alone would.
+        val result = applyLibraryFilters(listOf(heist), LibraryFilter.ALL, "#тюрьма сокровища", SortOrder.TITLE)
+        assertEquals(emptyList<MediaItemEntity>(), result)
+    }
+
+    @Test
+    fun `hashtag query with an untranslatable Russian word matches nothing, not everything`() {
+        val result = applyLibraryFilters(listOf(heist), LibraryFilter.ALL, "#несуществующееслово", SortOrder.TITLE)
         assertEquals(emptyList<MediaItemEntity>(), result)
     }
 
