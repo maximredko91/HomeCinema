@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -120,15 +122,32 @@ fun LibraryScreen(
     var filtersSheetOpen by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
 
-    // Hoisted here (rather than inside CollectionsGrid) because LibraryScreen itself stays
-    // mounted while browsing into and out of a collection - a state remembered inside
-    // CollectionsGrid would reset every time that composable unmounts/remounts.
+    // Hoisted here (rather than inside CollectionsGrid/ListsGrid) because LibraryScreen itself
+    // stays mounted while browsing into and out of a collection/list - a state remembered
+    // inside those composables would reset every time they unmount/remount. Separate instances
+    // (not shared) because with swipeable tabs both grids can be composed simultaneously mid-
+    // drag, and a single LazyGridState can only be attached to one LazyVerticalGrid at a time.
     val collectionsGridState = rememberLazyGridState()
+    val listsGridState = rememberLazyGridState()
+    val pagerState = rememberPagerState(initialPage = libraryTab.ordinal) { LibraryTab.entries.size }
 
     val selectedListName = when (selectedListId) {
         null -> null
         FAVORITES_LIST_ID -> "Избранное"
         else -> customLists.firstOrNull { it.id == selectedListId }?.name
+    }
+
+    // Two-way sync between the pager (swipe) and the ViewModel's tab state (tap on TabRow) -
+    // each guards against re-triggering the other once they already agree, so this settles
+    // rather than ping-ponging.
+    LaunchedEffect(pagerState.currentPage) {
+        val tab = LibraryTab.entries[pagerState.currentPage]
+        if (tab != libraryTab) viewModel.setLibraryTab(tab)
+    }
+    LaunchedEffect(libraryTab) {
+        if (pagerState.currentPage != libraryTab.ordinal) {
+            pagerState.animateScrollToPage(libraryTab.ordinal)
+        }
     }
 
     // Closing search takes priority over leaving a collection/list when both are active -
@@ -292,29 +311,53 @@ fun LibraryScreen(
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().glassBackdrop()) {
-            when {
-                libraryTab == LibraryTab.COLLECTIONS && selectedCollection == null -> CollectionsGrid(
-                    configured = configured,
-                    collections = collections,
-                    gridColumns = gridColumns,
-                    gridState = collectionsGridState,
-                    onOpenSettings = onOpenSettings,
-                    onSelectCollection = viewModel::selectCollection,
-                    topContentPadding = padding.calculateTopPadding()
-                )
-                libraryTab == LibraryTab.LISTS && selectedListId == null -> ListsGrid(
-                    customLists = customLists,
-                    listCounts = listCounts,
-                    favoritesCount = favoritesCount,
-                    gridColumns = gridColumns,
-                    gridState = collectionsGridState,
-                    onSelectList = viewModel::selectList,
-                    onCreateList = viewModel::createList,
-                    onRenameList = viewModel::renameList,
-                    onDeleteList = viewModel::deleteList,
-                    topContentPadding = padding.calculateTopPadding()
-                )
-                else -> LibraryGrid(
+            // Swiping between tabs only makes sense at each tab's top level - once drilled
+            // into a specific collection or list, that replaces the pager with a single
+            // filtered view instead (same as before swipe support existed).
+            if (selectedCollection == null && selectedListId == null) {
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                    when (LibraryTab.entries[page]) {
+                        LibraryTab.ALL -> LibraryGrid(
+                            configured = configured,
+                            items = items,
+                            progress = progress,
+                            filter = filter,
+                            query = query,
+                            sortOrder = sortOrder,
+                            alphabetIndexEnabled = alphabetIndexEnabled,
+                            gridColumns = gridColumns,
+                            onOpenDetail = onOpenDetail,
+                            onOpenSettings = onOpenSettings,
+                            onSetQuery = viewModel::setQuery,
+                            onRescan = viewModel::rescan,
+                            onDismissProgress = viewModel::dismissProgress,
+                            topContentPadding = padding.calculateTopPadding()
+                        )
+                        LibraryTab.COLLECTIONS -> CollectionsGrid(
+                            configured = configured,
+                            collections = collections,
+                            gridColumns = gridColumns,
+                            gridState = collectionsGridState,
+                            onOpenSettings = onOpenSettings,
+                            onSelectCollection = viewModel::selectCollection,
+                            topContentPadding = padding.calculateTopPadding()
+                        )
+                        LibraryTab.LISTS -> ListsGrid(
+                            customLists = customLists,
+                            listCounts = listCounts,
+                            favoritesCount = favoritesCount,
+                            gridColumns = gridColumns,
+                            gridState = listsGridState,
+                            onSelectList = viewModel::selectList,
+                            onCreateList = viewModel::createList,
+                            onRenameList = viewModel::renameList,
+                            onDeleteList = viewModel::deleteList,
+                            topContentPadding = padding.calculateTopPadding()
+                        )
+                    }
+                }
+            } else {
+                LibraryGrid(
                     configured = configured,
                     items = items,
                     progress = progress,
