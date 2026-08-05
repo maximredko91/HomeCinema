@@ -17,30 +17,58 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
-private const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
+// Deliberately generous. MX Player (confirmed via logcat: it downloads a burst over the fast
+// loopback/local-network connection, closes that HTTP connection entirely, then plays for a
+// long stretch from its own buffer before opening a new connection for the next chunk) does NOT
+// keep one connection open for the whole file, so "no currently-open stream" is common and
+// completely normal mid-playback, not just at the real end. There is no reliable signal at all
+// for "the external player is done with this stream" - short of tracking that specific player's
+// process lifecycle, which is fragile and player-specific. A tight timeout here doesn't detect
+// "playback ended", it just guesses wrong and kills a still-playing stream. So this exists purely
+// as a long-tail safety net against a truly abandoned/forgotten stream leaking the foreground
+// service forever, not as a "playback ended" detector - it needs to comfortably outlast any
+// normal single-sitting viewing, not react quickly.
+private const val IDLE_TIMEOUT_MS = 6 * 60 * 60 * 1000L
 private const val NOTIFICATION_ID = 4200
 
 /**
  * Foreground service hosting [LocalStreamingServer] so it (and the process it lives in) keeps
  * running while an external player is actively pulling bytes from it, even if HomeCinema itself
  * gets backgrounded - same reasoning that put downloads on WorkManager rather than a plain
- * app-scoped coroutine earlier. Since there's no reliable signal for "the external player
- * closed," it just stops itself after [IDLE_TIMEOUT_MS] with no HTTP requests.
+ * app-scoped coroutine earlier. See [IDLE_TIMEOUT_MS] for why the auto-shutdown timer is so long.
  */
 class StreamingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var idleWatchdog: Job? = null
 
+    /** How many streaming responses are currently open (constructed but not yet closed) on
+     * [LocalStreamingServer]. The idle-shutdown countdown only ever runs while this is 0 -
+     * NanoHTTPD dispatches concurrent requests on separate worker threads, so this needs to be
+     * genuinely thread-safe, not just single-threaded-looking. */
+    private val activeStreams = AtomicInteger(0)
+
     override fun onCreate() {
         super.onCreate()
-        ensureServerStarted().onRequest = { resetIdleWatchdog() }
+        ensureServerStarted().apply {
+            onStreamOpened = {
+                activeStreams.incrementAndGet()
+                idleWatchdog?.cancel()
+            }
+            onStreamClosed = {
+                if (activeStreams.decrementAndGet() <= 0) resetIdleWatchdog()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        resetIdleWatchdog()
+        // Don't blindly (re)start the countdown here - a second playback request arriving while
+        // the first is still actively streaming would otherwise schedule a shutdown that has
+        // nothing to do with that first, still-open connection.
+        if (activeStreams.get() <= 0) resetIdleWatchdog()
         return START_STICKY
     }
 

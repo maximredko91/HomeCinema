@@ -5,14 +5,18 @@ import java.io.InputStream
 
 /** Adapts jcifs-ng's [SmbRandomAccessFile] (which supports seeking) to a plain [InputStream]
  * so it can be handed to anything that reads streams - ExoPlayer's DataSource, download resume,
- * or the local HTTP proxy for external players. [onRead] fires on every successful read - the
- * local HTTP proxy uses it to keep its idle-shutdown watchdog alive for the whole duration of a
- * single long-lived streaming connection, not just when it's first opened. */
+ * or the local HTTP proxy for external players. [onClose] fires once the stream is closed - the
+ * local HTTP proxy uses it to know when a streaming connection has actually ended, rather than
+ * guessing from read cadence (a player can legitimately go quiet for minutes while it plays from
+ * its own buffer without ever closing the connection). */
 class SmbRandomAccessInputStream(
     private val raf: SmbRandomAccessFile,
-    private val onRead: (() -> Unit)? = null
+    private val onClose: (() -> Unit)? = null
 ) : InputStream() {
-    override fun read(): Int = raf.read().also { if (it >= 0) onRead?.invoke() }
-    override fun read(b: ByteArray, off: Int, len: Int): Int = raf.read(b, off, len).also { if (it >= 0) onRead?.invoke() }
-    override fun close() = raf.close()
+    override fun read(): Int = raf.read()
+    override fun read(b: ByteArray, off: Int, len: Int): Int = raf.read(b, off, len)
+    override fun close() {
+        raf.close()
+        onClose?.invoke()
+    }
 }

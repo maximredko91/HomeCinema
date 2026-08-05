@@ -23,12 +23,15 @@ private const val STREAM_PATH_PREFIX = "/stream/"
  */
 class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
 
-    /** Called on every request - lets [StreamingService] reset its idle-shutdown timer. */
-    var onRequest: (() -> Unit)? = null
+    /** Called when a streaming response starts / when it (eventually) closes - lets
+     * [StreamingService] know whether a connection is actually still live rather than guessing
+     * from request cadence. A player can legitimately buffer ahead over the loopback connection
+     * and then go quiet on it for a long stretch while it plays from its own buffer without ever
+     * closing the connection - only the close is a real "done" signal. */
+    var onStreamOpened: (() -> Unit)? = null
+    var onStreamClosed: (() -> Unit)? = null
 
     override fun serve(session: IHTTPSession): Response {
-        onRequest?.invoke()
-
         val uri = session.uri
         if (!uri.startsWith(STREAM_PATH_PREFIX)) {
             return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
@@ -41,7 +44,7 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
         val resolved = runCatching { resolveSmbFile(itemId) }.getOrNull()
             ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
 
-        return runCatching { serveFile(session, resolved.first, resolved.second) { onRequest?.invoke() } }
+        return runCatching { serveFile(session, resolved.first, resolved.second) }
             .getOrElse { newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", it.message ?: "Error") }
     }
 
@@ -55,7 +58,7 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
         smbFile to item.videoFilePath
     }
 
-    private fun serveFile(session: IHTTPSession, smbFile: SmbFile, path: String, onRead: () -> Unit): Response {
+    private fun serveFile(session: IHTTPSession, smbFile: SmbFile, path: String): Response {
         val totalLength = runCatching { smbFile.length() }.getOrDefault(-1L)
         val mimeType = mimeTypeForExtension(path.substringAfterLast('.', ""))
         val rangeHeader = session.headers["range"]
@@ -64,10 +67,11 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
         val raf = SmbRandomAccessFile(smbFile, "r").apply { seek(start) }
         val contentLength = if (totalLength > 0) end - start + 1 else -1L
 
+        onStreamOpened?.invoke()
         val response = newFixedLengthResponse(
             if (isPartial) Response.Status.PARTIAL_CONTENT else Response.Status.OK,
             mimeType,
-            SmbRandomAccessInputStream(raf, onRead),
+            SmbRandomAccessInputStream(raf) { onStreamClosed?.invoke() },
             contentLength
         )
         response.addHeader("Accept-Ranges", "bytes")
