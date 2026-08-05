@@ -41,7 +41,7 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
         val resolved = runCatching { resolveSmbFile(itemId) }.getOrNull()
             ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
 
-        return runCatching { serveFile(session, resolved.first, resolved.second) }
+        return runCatching { serveFile(session, resolved.first, resolved.second) { onRequest?.invoke() } }
             .getOrElse { newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", it.message ?: "Error") }
     }
 
@@ -55,7 +55,7 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
         smbFile to item.videoFilePath
     }
 
-    private fun serveFile(session: IHTTPSession, smbFile: SmbFile, path: String): Response {
+    private fun serveFile(session: IHTTPSession, smbFile: SmbFile, path: String, onRead: () -> Unit): Response {
         val totalLength = runCatching { smbFile.length() }.getOrDefault(-1L)
         val mimeType = mimeTypeForExtension(path.substringAfterLast('.', ""))
         val rangeHeader = session.headers["range"]
@@ -67,7 +67,7 @@ class LocalStreamingServer(port: Int = 0) : NanoHTTPD("127.0.0.1", port) {
         val response = newFixedLengthResponse(
             if (isPartial) Response.Status.PARTIAL_CONTENT else Response.Status.OK,
             mimeType,
-            SmbRandomAccessInputStream(raf),
+            SmbRandomAccessInputStream(raf, onRead),
             contentLength
         )
         response.addHeader("Accept-Ranges", "bytes")
