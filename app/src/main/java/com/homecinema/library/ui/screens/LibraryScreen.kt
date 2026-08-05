@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
@@ -117,6 +118,7 @@ fun LibraryScreen(
     val listCounts by viewModel.listCounts.collectAsState()
     val favoritesCount by viewModel.favoritesCount.collectAsState()
     val selectedListId by viewModel.selectedListId.collectAsState()
+    val searchHistory by viewModel.searchHistory.collectAsState()
 
     var searchActive by remember { mutableStateOf(false) }
     var filtersSheetOpen by remember { mutableStateOf(false) }
@@ -150,14 +152,20 @@ fun LibraryScreen(
         }
     }
 
+    // Records whatever the user was searching for (if anything) before actually closing search -
+    // capturing it here rather than after clearing the query, since setQuery("") below would
+    // otherwise wipe out the value being recorded.
+    fun closeSearch() {
+        if (query.isNotBlank()) viewModel.recordSearchHistoryEntry(query)
+        searchActive = false
+        viewModel.setQuery("")
+    }
+
     // Closing search takes priority over leaving a collection/list when both are active -
     // it's the more local, more recently opened piece of state.
     BackHandler(enabled = selectedCollection != null) { viewModel.clearCollectionSelection() }
     BackHandler(enabled = selectedListId != null) { viewModel.clearListSelection() }
-    BackHandler(enabled = searchActive) {
-        searchActive = false
-        viewModel.setQuery("")
-    }
+    BackHandler(enabled = searchActive) { closeSearch() }
 
     val showSearchAndFilters = libraryTab == LibraryTab.ALL || selectedCollection != null || selectedListId != null
     // Same branch this drives in the `when` below - the update/continue-watching banners
@@ -206,20 +214,19 @@ fun LibraryScreen(
                             painter = painterResource(R.drawable.ic_app_logo),
                             contentDescription = "Home Cinema",
                             modifier = Modifier.size(32.dp).clickable {
+                                closeSearch()
                                 viewModel.setLibraryTab(LibraryTab.ALL)
                                 viewModel.clearCollectionSelection()
                                 viewModel.setFilter(LibraryFilter.ALL)
                                 viewModel.setGenre(null)
                                 viewModel.setYearRange(null)
-                                viewModel.setQuery("")
-                                searchActive = false
                             }
                         )
                     }
                 },
                 navigationIcon = {
                     if (searchActive) {
-                        IconButton(onClick = { searchActive = false; viewModel.setQuery("") }) {
+                        IconButton(onClick = { closeSearch() }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Закрыть поиск")
                         }
                     } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
@@ -311,10 +318,18 @@ fun LibraryScreen(
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().glassBackdrop()) {
-            // Swiping between tabs only makes sense at each tab's top level - once drilled
-            // into a specific collection or list, that replaces the pager with a single
-            // filtered view instead (same as before swipe support existed).
-            if (selectedCollection == null && selectedListId == null) {
+            if (searchActive && query.isBlank()) {
+                SearchHistoryPanel(
+                    history = searchHistory,
+                    topContentPadding = padding.calculateTopPadding(),
+                    onSelect = viewModel::setQuery,
+                    onRemove = viewModel::removeSearchHistoryEntry,
+                    onClearAll = viewModel::clearSearchHistory
+                )
+            } else if (selectedCollection == null && selectedListId == null) {
+                // Swiping between tabs only makes sense at each tab's top level - once drilled
+                // into a specific collection or list, that replaces the pager with a single
+                // filtered view instead (same as before swipe support existed).
                 HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     when (LibraryTab.entries[page]) {
                         LibraryTab.ALL -> LibraryGrid(
@@ -1021,6 +1036,69 @@ private fun AlphabetIndexBar(
                 color = if (letter == highlightedLetter) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
+        }
+    }
+}
+
+/** Shown in place of the grid while search is active but the field is still empty - tapping an
+ * entry re-runs that search, the per-row × removes just that one, "Очистить всё" wipes the
+ * whole history. A query only lands here once search is actually closed (see closeSearch() in
+ * LibraryScreen) - recording on every keystroke would just fill this with typing noise. */
+@Composable
+private fun SearchHistoryPanel(
+    history: List<String>,
+    topContentPadding: androidx.compose.ui.unit.Dp,
+    onSelect: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onClearAll: () -> Unit
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(top = topContentPadding)
+            .verticalScroll(rememberScrollState())
+    ) {
+        if (history.isEmpty()) {
+            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    "История поиска пуста",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "История поиска",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onClearAll) { Text("Очистить всё") }
+            }
+            history.forEach { entry ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(entry) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(entry, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    IconButton(onClick = { onRemove(entry) }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Удалить «$entry» из истории")
+                    }
+                }
+            }
         }
     }
 }

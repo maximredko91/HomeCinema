@@ -176,6 +176,21 @@ class LibraryViewModel : ViewModel() {
 
     fun dismissUpdate(version: String) = app.dismissUpdate(version)
 
+    val searchHistory: StateFlow<List<String>> = app.settingsStore.searchHistoryFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun recordSearchHistoryEntry(query: String) {
+        viewModelScope.launch { app.settingsStore.addSearchHistoryEntry(query) }
+    }
+
+    fun removeSearchHistoryEntry(query: String) {
+        viewModelScope.launch { app.settingsStore.removeSearchHistoryEntry(query) }
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch { app.settingsStore.clearSearchHistory() }
+    }
+
     fun setFilter(filter: LibraryFilter) {
         _filter.value = filter
     }

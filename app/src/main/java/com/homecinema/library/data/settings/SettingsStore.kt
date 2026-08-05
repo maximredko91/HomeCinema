@@ -10,8 +10,11 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
 
 private val Context.dataStore by preferencesDataStore(name = "home_cinema_settings")
+
+private const val MAX_SEARCH_HISTORY = 15
 
 data class SmbConfig(
     val host: String = "",
@@ -51,6 +54,7 @@ class SettingsStore(private val context: Context) {
         val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
         val GLASS_BACKGROUND_COLOR = stringPreferencesKey("glass_background_color")
         val GLASS_OPACITY = intPreferencesKey("glass_opacity")
+        val SEARCH_HISTORY = stringPreferencesKey("search_history")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -188,5 +192,44 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.GLASS_OPACITY] = percent.coerceIn(40, 95)
         }
+    }
+
+    /** Recent search queries, most recent first - shown as suggestions when the search field
+     * is tapped but still empty. Stored as a JSON array (order matters here, unlike the plain
+     * comma-joined strings elsewhere in this file, so a Set wouldn't do). */
+    val searchHistoryFlow: Flow<List<String>> = context.dataStore.data.map { prefs ->
+        parseSearchHistory(prefs[Keys.SEARCH_HISTORY])
+    }
+
+    /** Adds [query] to the front of the history, moving it there if already present
+     * (case-insensitive) instead of duplicating it, capped at [MAX_SEARCH_HISTORY] entries. */
+    suspend fun addSearchHistoryEntry(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        context.dataStore.edit { prefs ->
+            val current = parseSearchHistory(prefs[Keys.SEARCH_HISTORY])
+            val updated = (listOf(trimmed) + current.filterNot { it.equals(trimmed, ignoreCase = true) })
+                .take(MAX_SEARCH_HISTORY)
+            prefs[Keys.SEARCH_HISTORY] = JSONArray(updated).toString()
+        }
+    }
+
+    suspend fun removeSearchHistoryEntry(query: String) {
+        context.dataStore.edit { prefs ->
+            val current = parseSearchHistory(prefs[Keys.SEARCH_HISTORY])
+            prefs[Keys.SEARCH_HISTORY] = JSONArray(current.filterNot { it == query }).toString()
+        }
+    }
+
+    suspend fun clearSearchHistory() {
+        context.dataStore.edit { prefs -> prefs.remove(Keys.SEARCH_HISTORY) }
+    }
+
+    private fun parseSearchHistory(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            (0 until array.length()).map { array.getString(it) }
+        }.getOrDefault(emptyList())
     }
 }
