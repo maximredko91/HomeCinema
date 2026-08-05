@@ -1,7 +1,10 @@
 package com.homecinema.library.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -55,6 +58,7 @@ import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.scanner.ScanProgress
 import com.homecinema.library.data.update.ReleaseInfo
+import com.homecinema.library.data.update.UpdateDownloader
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.viewmodel.CollectionSummary
 import com.homecinema.library.ui.viewmodel.FAVORITES_LIST_ID
@@ -78,6 +82,7 @@ import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1140,7 +1145,7 @@ private fun UpdateAvailableBanner(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    var dialogOpen by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier.fillMaxWidth().padding(16.dp),
         shape = MaterialTheme.shapes.medium,
@@ -1152,12 +1157,121 @@ private fun UpdateAvailableBanner(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Доступна версия ${release.version}", modifier = Modifier.weight(1f))
-            TextButton(onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)))
-            }) { Text("Скачать") }
+            TextButton(onClick = { dialogOpen = true }) { Text("Подробнее") }
             TextButton(onClick = onDismiss) { Text("Закрыть") }
         }
     }
+
+    if (dialogOpen) {
+        UpdateDialog(release = release, onDismiss = { dialogOpen = false })
+    }
+}
+
+private sealed interface UpdateDownloadState {
+    data object Idle : UpdateDownloadState
+    data class Downloading(val percent: Int) : UpdateDownloadState
+    data class Failed(val message: String) : UpdateDownloadState
+}
+
+/** Shows the release's changelog and lets the user decide whether to install it - tapping
+ * "Установить" downloads the APK straight into the app (no browser round-trip) and hands it to
+ * the system installer. Falls back to opening the GitHub release page only if a release somehow
+ * has no APK asset attached (shouldn't normally happen, every release here ships one). */
+@Composable
+private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<UpdateDownloadState>(UpdateDownloadState.Idle) }
+
+    fun startDownload(apkUrl: String) {
+        state = UpdateDownloadState.Downloading(0)
+        scope.launch {
+            UpdateDownloader.download(context, apkUrl, release.version) { percent ->
+                state = UpdateDownloadState.Downloading(percent)
+            }.onSuccess { file ->
+                installApk(context, file)
+                onDismiss()
+            }.onFailure { e ->
+                state = UpdateDownloadState.Failed(e.message ?: "Не удалось скачать обновление")
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (state !is UpdateDownloadState.Downloading) onDismiss() },
+        title = { Text("Версия ${release.version}") },
+        text = {
+            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                val current = state
+                when (current) {
+                    is UpdateDownloadState.Downloading -> {
+                        Text("Загрузка… ${current.percent}%")
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { current.percent / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    is UpdateDownloadState.Failed -> {
+                        Text(current.message, color = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(12.dp))
+                        Text(release.body)
+                    }
+                    UpdateDownloadState.Idle -> {
+                        if (release.apkUrl == null) {
+                            Text(
+                                "Файл сборки не найден в этом релизе.",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.height(12.dp))
+                        }
+                        Text(release.body)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            when (state) {
+                UpdateDownloadState.Idle, is UpdateDownloadState.Failed -> {
+                    val apkUrl = release.apkUrl
+                    if (apkUrl != null) {
+                        TextButton(onClick = {
+                            if (context.packageManager.canRequestPackageInstalls()) {
+                                startDownload(apkUrl)
+                            } else {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                        }) { Text("Установить") }
+                    } else {
+                        TextButton(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)))
+                        }) { Text("Открыть на GitHub") }
+                    }
+                }
+                is UpdateDownloadState.Downloading -> {}
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = state !is UpdateDownloadState.Downloading
+            ) { Text("Отмена") }
+        }
+    )
+}
+
+private fun installApk(context: Context, file: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
 }
 
 /** Builds a short human-readable summary of whatever category/genre/year filter is active,

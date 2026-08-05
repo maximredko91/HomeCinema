@@ -12,7 +12,7 @@ private const val LATEST_RELEASE_URL =
 private const val ALL_RELEASES_URL =
     "https://api.github.com/repos/maximredko91/HomeCinema/releases"
 
-data class ReleaseInfo(val version: String, val htmlUrl: String)
+data class ReleaseInfo(val version: String, val htmlUrl: String, val body: String, val apkUrl: String?)
 
 data class ReleaseNote(val version: String, val name: String, val body: String, val publishedAt: String)
 
@@ -32,11 +32,19 @@ object UpdateChecker {
                 readTimeout = 5000
                 setRequestProperty("Accept", "application/vnd.github+json")
             }
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(body)
+            val responseBody = connection.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(responseBody)
+            val assets = json.optJSONArray("assets")
+            val apkUrl = (0 until (assets?.length() ?: 0)).firstNotNullOfOrNull { i ->
+                val asset = assets!!.getJSONObject(i)
+                val downloadUrl = asset.getString("browser_download_url")
+                downloadUrl.takeIf { it.endsWith(".apk") }
+            }
             ReleaseInfo(
                 version = json.getString("tag_name").removePrefix("v"),
-                htmlUrl = json.getString("html_url")
+                htmlUrl = json.getString("html_url"),
+                body = json.optString("body").ifBlank { "Без описания." },
+                apkUrl = apkUrl
             )
         }.getOrNull()
     }
