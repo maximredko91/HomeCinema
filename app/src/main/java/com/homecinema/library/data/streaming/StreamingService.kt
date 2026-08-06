@@ -1,5 +1,6 @@
 package com.homecinema.library.data.streaming
 
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -7,6 +8,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.homecinema.library.MainActivity
 import com.homecinema.library.HomeCinemaApp
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +66,14 @@ class StreamingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            // Manual "Остановить" tap from the notification - the idle timer is a 6h long-tail
+            // safety net (see IDLE_TIMEOUT_MS), not a "just finished watching" detector, so a
+            // user who knows they're actually done has no other way to clear this notification
+            // sooner than that.
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         // Don't blindly (re)start the countdown here - a second playback request arriving while
         // the first is still actively streaming would otherwise schedule a shutdown that has
@@ -90,14 +100,32 @@ class StreamingService : Service() {
         }
     }
 
-    private fun buildNotification() =
-        NotificationCompat.Builder(this, HomeCinemaApp.STREAMING_NOTIFICATION_CHANNEL_ID)
+    private fun buildNotification(): android.app.Notification {
+        // Tapping used to do nothing at all (no contentIntent was ever set) - opens the app now.
+        val openAppIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        // Manual escape hatch for the 6h safety-net timer above - a user who's actually done
+        // watching doesn't need to wait it out.
+        val stopIntent = PendingIntent.getService(
+            this, 0,
+            Intent(this, StreamingService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        return NotificationCompat.Builder(this, HomeCinemaApp.STREAMING_NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Воспроизведение во внешнем плеере")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setOngoing(true)
+            .setContentIntent(openAppIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Остановить", stopIntent)
             .build()
+    }
 
     companion object {
+        private const val ACTION_STOP = "com.homecinema.library.streaming.STOP"
+
         @Volatile private var server: LocalStreamingServer? = null
 
         private fun ensureServerStarted(): LocalStreamingServer {

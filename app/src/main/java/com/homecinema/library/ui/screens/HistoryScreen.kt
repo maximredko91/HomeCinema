@@ -23,6 +23,7 @@ import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,7 +51,7 @@ fun HistoryScreen(onBack: () -> Unit, onOpenDetail: (String) -> Unit) {
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.glassEffect()
+                modifier = Modifier.floatingChrome()
             )
         }
     ) { padding ->

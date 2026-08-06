@@ -29,6 +29,7 @@ import com.homecinema.library.ui.components.ZoomableImageDialog
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 
@@ -62,7 +63,7 @@ fun ShowDetailScreen(
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.glassEffect()
+                modifier = Modifier.floatingChrome()
             )
         }
     ) { padding ->

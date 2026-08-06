@@ -27,12 +27,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -50,6 +53,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +65,8 @@ import com.homecinema.library.R
 import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.scanner.ScanProgress
+import com.homecinema.library.data.settings.LibraryLayout
+import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.update.ReleaseInfo
 import com.homecinema.library.data.update.UpdateDownloader
 import com.homecinema.library.ui.components.MediaPosterCard
@@ -76,6 +83,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Add
+import com.homecinema.library.ui.theme.LocalIsGlassTheme
+import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.glassSheetContainerColor
@@ -158,6 +167,23 @@ fun LibraryScreen(
     val favoritesCount by viewModel.favoritesCount.collectAsState()
     val selectedListId by viewModel.selectedListId.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
+    val libraryLayout by viewModel.libraryLayout.collectAsState()
+    val playbackMode by viewModel.playbackMode.collectAsState()
+    val context = LocalContext.current
+    val playScope = rememberCoroutineScope()
+    // Continue Watching used to always jump into the internal player regardless of the user's
+    // playback-mode setting - if you'd started something in an external player (MX Player,
+    // etc.), tapping its Continue Watching card yanked you into the internal one instead, with
+    // no memory of where you actually were. Routes through the same setting as the detail
+    // screen's own "Смотреть" button. ASK still defaults to internal here (no natural place for
+    // a second button on a Continue Watching card the way DetailScreen has room for one).
+    fun handleContinueWatchingClick(item: MediaItemEntity) {
+        if (playbackMode == PlaybackMode.EXTERNAL) {
+            playScope.launch { playExternally(context, item) }
+        } else {
+            onPlayItem(item.id)
+        }
+    }
 
     var searchActive by remember { mutableStateOf(false) }
     var filtersSheetOpen by remember { mutableStateOf(false) }
@@ -228,9 +254,124 @@ fun LibraryScreen(
     val filtersActive = filter != LibraryFilter.ALL || selectedGenre != null || yearRange != null
 
     ProvideGlassHazeState {
+    val bodyContent: @Composable (PaddingValues) -> Unit = { padding ->
+        Box(Modifier.fillMaxSize().glassBackdrop()) {
+            if (searchActive && query.isBlank()) {
+                SearchHistoryPanel(
+                    history = searchHistory,
+                    topContentPadding = padding.calculateTopPadding(),
+                    onSelect = viewModel::setQuery,
+                    onRemove = viewModel::removeSearchHistoryEntry,
+                    onClearAll = viewModel::clearSearchHistory
+                )
+            } else if (selectedCollection == null && selectedListId == null) {
+                // Swiping between tabs only makes sense at each tab's top level - once drilled
+                // into a specific collection or list, that replaces the pager with a single
+                // filtered view instead (same as before swipe support existed).
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                    when (LibraryTab.entries[page]) {
+                        LibraryTab.ALL -> LibraryGrid(
+                            configured = configured,
+                            items = items,
+                            progress = progress,
+                            filter = filter,
+                            query = query,
+                            sortOrder = sortOrder,
+                            // Only show the alphabet bar once settled on this page - during a
+                            // swipe HorizontalPager keeps neighboring pages composed so the
+                            // transition can be followed, which otherwise let the bar's edge
+                            // show through over the Collections/Lists page mid-drag. Gated on
+                            // the pager's own horizontal offset rather than isScrollInProgress -
+                            // that flag also flips during an ordinary vertical fling inside the
+                            // nested grid (nested-scroll handshake with the pager), which made
+                            // the bar pop in/out and the grid reflow width on every scroll -
+                            // the "card jitter" bug. currentPageOffsetFraction only moves when
+                            // there's an actual horizontal drag/transition.
+                            alphabetIndexEnabled = alphabetIndexEnabled &&
+                                kotlin.math.abs(pagerState.currentPageOffsetFraction) < 0.01f,
+                            gridColumns = gridColumns,
+                            onOpenDetail = onOpenDetail,
+                            onOpenSettings = onOpenSettings,
+                            onSetQuery = viewModel::setQuery,
+                            onRescan = viewModel::rescan,
+                            onDismissProgress = viewModel::dismissProgress,
+                            topContentPadding = padding.calculateTopPadding(),
+                            bottomContentPadding = padding.calculateBottomPadding()
+                        )
+                        LibraryTab.COLLECTIONS -> CollectionsGrid(
+                            configured = configured,
+                            collections = collections,
+                            gridColumns = gridColumns,
+                            gridState = collectionsGridState,
+                            onOpenSettings = onOpenSettings,
+                            onSelectCollection = viewModel::selectCollection,
+                            topContentPadding = padding.calculateTopPadding(),
+                            bottomContentPadding = padding.calculateBottomPadding()
+                        )
+                        LibraryTab.LISTS -> ListsGrid(
+                            customLists = customLists,
+                            listCounts = listCounts,
+                            favoritesCount = favoritesCount,
+                            gridColumns = gridColumns,
+                            gridState = listsGridState,
+                            onSelectList = viewModel::selectList,
+                            onCreateList = viewModel::createList,
+                            onRenameList = viewModel::renameList,
+                            onDeleteList = viewModel::deleteList,
+                            topContentPadding = padding.calculateTopPadding(),
+                            bottomContentPadding = padding.calculateBottomPadding()
+                        )
+                    }
+                }
+            } else {
+                // Drilled into one specific collection or list - an empty result here means
+                // "this collection/list has nothing in it", not "the library needs scanning".
+                // The generic empty state (used on the main Библиотека tab) suggested running
+                // a library scan even for an empty Избранное, which made no sense - there's
+                // nothing to scan for, the user just hasn't favorited anything yet.
+                val emptyOverride = if (items.isEmpty() && progress == null) {
+                    when {
+                        selectedListId == FAVORITES_LIST_ID -> LibraryEmptyOverride(
+                            title = "Пока ничего нет в избранном",
+                            subtitle = "Отмечайте фильмы и сериалы сердечком на странице описания, чтобы они появились здесь."
+                        )
+                        selectedListId != null -> LibraryEmptyOverride(
+                            title = "Список пуст",
+                            subtitle = "Добавьте фильмы или сериалы в этот список со страницы описания."
+                        )
+                        selectedCollection != null -> LibraryEmptyOverride(
+                            title = "В коллекции ничего нет",
+                            subtitle = "Похоже, все тайтлы из этой коллекции пропали из библиотеки."
+                        )
+                        else -> null
+                    }
+                } else null
+                LibraryGrid(
+                    configured = configured,
+                    items = items,
+                    progress = progress,
+                    filter = filter,
+                    query = query,
+                    sortOrder = sortOrder,
+                    alphabetIndexEnabled = alphabetIndexEnabled,
+                    gridColumns = gridColumns,
+                    onOpenDetail = onOpenDetail,
+                    onOpenSettings = onOpenSettings,
+                    onSetQuery = viewModel::setQuery,
+                    onRescan = viewModel::rescan,
+                    onDismissProgress = viewModel::dismissProgress,
+                    topContentPadding = padding.calculateTopPadding(),
+                    bottomContentPadding = padding.calculateBottomPadding(),
+                    emptyOverride = emptyOverride
+                )
+            }
+        }
+    }
+
+    if (libraryLayout == LibraryLayout.CLASSIC) {
     Scaffold(
         topBar = {
-            Column(Modifier.glassEffect()) {
+            Column(Modifier.floatingChrome()) {
             TopAppBar(
                 title = {
                     if (searchActive) {
@@ -373,96 +514,186 @@ fun LibraryScreen(
                     )
                 }
                 if (selectedCollection == null && continueWatching.isNotEmpty()) {
-                    ContinueWatchingRow(items = continueWatching, onClick = onPlayItem, onDismiss = viewModel::dismissContinueWatching)
+                    ContinueWatchingRow(items = continueWatching, onClick = ::handleContinueWatchingClick, onDismiss = viewModel::dismissContinueWatching)
                 }
             }
             }
         }
-    ) { padding ->
-        Box(Modifier.fillMaxSize().glassBackdrop()) {
-            if (searchActive && query.isBlank()) {
-                SearchHistoryPanel(
-                    history = searchHistory,
-                    topContentPadding = padding.calculateTopPadding(),
-                    onSelect = viewModel::setQuery,
-                    onRemove = viewModel::removeSearchHistoryEntry,
-                    onClearAll = viewModel::clearSearchHistory
-                )
-            } else if (selectedCollection == null && selectedListId == null) {
-                // Swiping between tabs only makes sense at each tab's top level - once drilled
-                // into a specific collection or list, that replaces the pager with a single
-                // filtered view instead (same as before swipe support existed).
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                    when (LibraryTab.entries[page]) {
-                        LibraryTab.ALL -> LibraryGrid(
-                            configured = configured,
-                            items = items,
-                            progress = progress,
-                            filter = filter,
-                            query = query,
-                            sortOrder = sortOrder,
-                            // Only show the alphabet bar once settled on this page - during a
-                            // swipe HorizontalPager keeps neighboring pages composed so the
-                            // transition can be followed, which otherwise let the bar's edge
-                            // show through over the Collections/Lists page mid-drag. Gated on
-                            // the pager's own horizontal offset rather than isScrollInProgress -
-                            // that flag also flips during an ordinary vertical fling inside the
-                            // nested grid (nested-scroll handshake with the pager), which made
-                            // the bar pop in/out and the grid reflow width on every scroll -
-                            // the "card jitter" bug. currentPageOffsetFraction only moves when
-                            // there's an actual horizontal drag/transition.
-                            alphabetIndexEnabled = alphabetIndexEnabled &&
-                                kotlin.math.abs(pagerState.currentPageOffsetFraction) < 0.01f,
-                            gridColumns = gridColumns,
-                            onOpenDetail = onOpenDetail,
-                            onOpenSettings = onOpenSettings,
-                            onSetQuery = viewModel::setQuery,
-                            onRescan = viewModel::rescan,
-                            onDismissProgress = viewModel::dismissProgress,
-                            topContentPadding = padding.calculateTopPadding()
+    ) { padding -> bodyContent(padding) }
+    } else {
+    // BOTTOM_NAV layout - primary navigation (Библиотека/Коллекции/Списки/Загрузки) lives in a
+    // bottom NavigationBar instead of a top TabRow, so it's within thumb reach. The top bar
+    // shrinks to just the logo/breadcrumb, search and settings - filters moved to live next to
+    // the search field (search doubles as "search and/or filter" instead of two separate
+    // buttons), downloads/history/scan moved out entirely (downloads is now a bottom-nav
+    // destination, history lives in Settings, scan is pull-to-refresh on the grid itself, same
+    // gesture in both layouts).
+    Scaffold(
+        topBar = {
+            Column(Modifier.floatingChrome()) {
+            TopAppBar(
+                title = {
+                    if (searchActive) {
+                        TextField(
+                            value = query,
+                            onValueChange = viewModel::setQuery,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(searchFocusRequester),
+                            placeholder = { Text("Название, актёры, описание или #тег") },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
                         )
-                        LibraryTab.COLLECTIONS -> CollectionsGrid(
-                            configured = configured,
-                            collections = collections,
-                            gridColumns = gridColumns,
-                            gridState = collectionsGridState,
-                            onOpenSettings = onOpenSettings,
-                            onSelectCollection = viewModel::selectCollection,
-                            topContentPadding = padding.calculateTopPadding()
+                        LaunchedEffect(Unit) { searchFocusRequester.requestFocus() }
+                    } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
+                        Text(
+                            text = selectedCollection!!,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        LibraryTab.LISTS -> ListsGrid(
-                            customLists = customLists,
-                            listCounts = listCounts,
-                            favoritesCount = favoritesCount,
-                            gridColumns = gridColumns,
-                            gridState = listsGridState,
-                            onSelectList = viewModel::selectList,
-                            onCreateList = viewModel::createList,
-                            onRenameList = viewModel::renameList,
-                            onDeleteList = viewModel::deleteList,
-                            topContentPadding = padding.calculateTopPadding()
+                    } else if (libraryTab == LibraryTab.LISTS && selectedListName != null) {
+                        Text(
+                            text = selectedListName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(R.drawable.ic_app_logo),
+                            contentDescription = "Home Cinema",
+                            modifier = Modifier.size(32.dp).clickable {
+                                closeSearch()
+                                viewModel.setLibraryTab(LibraryTab.ALL)
+                                viewModel.clearCollectionSelection()
+                                viewModel.setFilter(LibraryFilter.ALL)
+                                viewModel.setGenre(null)
+                                viewModel.setYearRange(null)
+                            }
                         )
                     }
+                },
+                navigationIcon = {
+                    if (searchActive) {
+                        IconButton(onClick = { closeSearch() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Закрыть поиск")
+                        }
+                    } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
+                        IconButton(onClick = { viewModel.clearCollectionSelection() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку коллекций")
+                        }
+                    } else if (libraryTab == LibraryTab.LISTS && selectedListId != null) {
+                        IconButton(onClick = { viewModel.clearListSelection() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку списков")
+                        }
+                    }
+                },
+                actions = {
+                    if (searchActive) {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.setQuery("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Очистить")
+                            }
+                        }
+                    } else {
+                        if (showSearchAndFilters) {
+                            IconButton(onClick = { searchActive = true }) {
+                                Icon(Icons.Default.Search, contentDescription = "Поиск")
+                            }
+                            BadgedBox(badge = { if (filtersActive) Badge() }) {
+                                IconButton(onClick = { filtersSheetOpen = true }) {
+                                    Icon(Icons.Default.FilterList, contentDescription = "Фильтры и сортировка")
+                                }
+                            }
+                        }
+                        IconButton(onClick = onOpenDownloads) {
+                            Icon(Icons.Default.Download, contentDescription = "Загрузки")
+                        }
+                        IconButton(onClick = { viewModel.rescan() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Сканировать библиотеку")
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                        }
+                    }
+                },
+                colors = homeCinemaTopAppBarColors()
+            )
+            if (searchActive && filtersActive) {
+                ActiveFilterDuringSearchBanner(
+                    filterLabel = describeActiveFilters(filter, selectedGenre, yearRange),
+                    onClearFilter = {
+                        viewModel.setFilter(LibraryFilter.ALL)
+                        viewModel.setGenre(null)
+                        viewModel.setYearRange(null)
+                    }
+                )
+            }
+            if (showingLibraryGrid) {
+                availableUpdate?.let { release ->
+                    UpdateAvailableBanner(
+                        release = release,
+                        onDismiss = { viewModel.dismissUpdate(release.version) }
+                    )
                 }
-            } else {
-                LibraryGrid(
-                    configured = configured,
-                    items = items,
-                    progress = progress,
-                    filter = filter,
-                    query = query,
-                    sortOrder = sortOrder,
-                    alphabetIndexEnabled = alphabetIndexEnabled,
-                    gridColumns = gridColumns,
-                    onOpenDetail = onOpenDetail,
-                    onOpenSettings = onOpenSettings,
-                    onSetQuery = viewModel::setQuery,
-                    onRescan = viewModel::rescan,
-                    onDismissProgress = viewModel::dismissProgress,
-                    topContentPadding = padding.calculateTopPadding()
+                if (rescanSuggested) {
+                    RescanSuggestedBanner(
+                        onRescan = { viewModel.dismissRescanSuggestion(); viewModel.rescan() },
+                        onDismiss = viewModel::dismissRescanSuggestion
+                    )
+                }
+                if (selectedCollection == null && continueWatching.isNotEmpty()) {
+                    ContinueWatchingRow(items = continueWatching, onClick = ::handleContinueWatchingClick, onDismiss = viewModel::dismissContinueWatching)
+                }
+            }
+            }
+        },
+        bottomBar = {
+            // Same treatment as the top bar (homeCinemaTopAppBarColors): transparent container
+            // in Glass theme so glassEffect's real blur shows through instead of a flat color
+            // sitting on top of it un-blurred; normal opaque Material3 default otherwise.
+            val isGlass = LocalIsGlassTheme.current
+            // Inset from the true screen edges, not full-bleed - on phones with strongly
+            // rounded/curved screen corners the OS masks off the actual corner pixels, and
+            // the outermost items (Библиотека on the far left, Загрузки on the far right) sat
+            // close enough to the edge to get visually clipped by that mask. A few dp of
+            // margin keeps every item's touch target and label inside the safe, unmasked area
+            // regardless of how aggressive the curve is on a given device.
+            NavigationBar(
+                modifier = Modifier.floatingChrome(),
+                containerColor = if (isGlass) Color.Transparent else NavigationBarDefaults.containerColor
+            ) {
+                NavigationBarItem(
+                    selected = libraryTab == LibraryTab.ALL,
+                    onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.ALL) },
+                    icon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                    label = { Text("Библиотека") }
+                )
+                NavigationBarItem(
+                    selected = libraryTab == LibraryTab.COLLECTIONS,
+                    onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.COLLECTIONS) },
+                    icon = { Icon(Icons.Default.Collections, contentDescription = null) },
+                    label = { Text("Коллекции") }
+                )
+                NavigationBarItem(
+                    selected = libraryTab == LibraryTab.LISTS,
+                    onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.LISTS) },
+                    icon = { Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null) },
+                    label = { Text("Списки") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { closeSearch(); onOpenHistory() },
+                    icon = { Icon(Icons.Default.History, contentDescription = null) },
+                    label = { Text("История") }
                 )
             }
         }
+    ) { padding -> bodyContent(padding) }
     }
 
     if (filtersSheetOpen) {
@@ -484,6 +715,10 @@ fun LibraryScreen(
     }
 }
 
+/** Overrides the "nothing here" message for a drilled-into collection/list - see the call site
+ * in LibraryScreen for why the generic "scan your library" empty state didn't fit there. */
+private data class LibraryEmptyOverride(val title: String, val subtitle: String)
+
 @Composable
 private fun LibraryGrid(
     configured: Boolean,
@@ -499,7 +734,9 @@ private fun LibraryGrid(
     onSetQuery: (String) -> Unit,
     onRescan: () -> Unit,
     onDismissProgress: () -> Unit,
-    topContentPadding: androidx.compose.ui.unit.Dp
+    topContentPadding: androidx.compose.ui.unit.Dp,
+    bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    emptyOverride: LibraryEmptyOverride? = null
 ) {
     val scope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
@@ -558,6 +795,14 @@ private fun LibraryGrid(
                             onAction = { onSetQuery("") }
                         )
                     }
+                    items.isEmpty() && progress == null && emptyOverride != null -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
+                        EmptyState(
+                            title = emptyOverride.title,
+                            subtitle = emptyOverride.subtitle,
+                            actionLabel = null,
+                            onAction = {}
+                        )
+                    }
                     items.isEmpty() && progress == null -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
                         EmptyState(
                             title = if (filter == LibraryFilter.ALL) "Библиотека пуста" else "Ничего не найдено в этой категории",
@@ -569,7 +814,7 @@ private fun LibraryGrid(
                     else -> LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Fixed(effectiveColumns),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomContentPadding + 16.dp, top = topContentPadding + 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -583,18 +828,20 @@ private fun LibraryGrid(
                     ScanProgressBanner(
                         progress = p,
                         onDismiss = onDismissProgress,
-                        modifier = Modifier.align(Alignment.BottomCenter)
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomContentPadding)
                     )
                 }
 
                 // The scan banner floats at the same bottom edge and would otherwise sit
-                // right under these buttons - push them up above it while it's visible.
+                // right under these buttons - push them up above it while it's visible. Plus
+                // bottomContentPadding so neither sits behind the bottom nav bar (BOTTOM_NAV
+                // layout only - 0dp in CLASSIC, which has no bottom bar to clear).
                 ScrollJumpButtons(
                     gridState = gridState,
                     itemCount = items.size,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = if (progress != null) 88.dp else 16.dp)
+                        .padding(end = 16.dp, bottom = bottomContentPadding + if (progress != null) 88.dp else 16.dp)
                 )
             }
 
@@ -614,7 +861,7 @@ private fun LibraryGrid(
 @Composable
 private fun ContinueWatchingRow(
     items: List<MediaItemEntity>,
-    onClick: (String) -> Unit,
+    onClick: (MediaItemEntity) -> Unit,
     onDismiss: (String) -> Unit
 ) {
     Column(Modifier.padding(top = 12.dp, bottom = 8.dp)) {
@@ -631,7 +878,7 @@ private fun ContinueWatchingRow(
             items(items, key = { it.id }) { item ->
                 ContinueWatchingCard(
                     item = item,
-                    onClick = { onClick(item.id) },
+                    onClick = { onClick(item) },
                     onDismiss = { onDismiss(item.id) }
                 )
             }
@@ -719,7 +966,8 @@ private fun CollectionsGrid(
     gridState: LazyGridState,
     onOpenSettings: () -> Unit,
     onSelectCollection: (String) -> Unit,
-    topContentPadding: androidx.compose.ui.unit.Dp
+    topContentPadding: androidx.compose.ui.unit.Dp,
+    bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp
 ) {
     when {
         !configured -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
@@ -743,7 +991,7 @@ private fun CollectionsGrid(
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(effectiveColumns),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomContentPadding + 16.dp, top = topContentPadding + 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
@@ -756,7 +1004,7 @@ private fun CollectionsGrid(
             ScrollJumpButtons(
                 gridState = gridState,
                 itemCount = collections.size,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottomContentPadding + 16.dp)
             )
         }
     }
@@ -775,7 +1023,8 @@ private fun ListsGrid(
     onCreateList: (String) -> Unit,
     onRenameList: (String, String) -> Unit,
     onDeleteList: (String) -> Unit,
-    topContentPadding: androidx.compose.ui.unit.Dp
+    topContentPadding: androidx.compose.ui.unit.Dp,
+    bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var listToRename by remember { mutableStateOf<CustomListEntity?>(null) }
@@ -786,7 +1035,7 @@ private fun ListsGrid(
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(effectiveColumns),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomContentPadding + 16.dp, top = topContentPadding + 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize()
@@ -817,7 +1066,7 @@ private fun ListsGrid(
         ScrollJumpButtons(
             gridState = gridState,
             itemCount = customLists.size + 2,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottomContentPadding + 16.dp)
         )
     }
 
@@ -1349,8 +1598,8 @@ private fun FiltersSheet(
 private fun EmptyState(
     title: String,
     subtitle: String,
-    actionLabel: String,
-    onAction: () -> Unit
+    actionLabel: String? = null,
+    onAction: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -1365,8 +1614,10 @@ private fun EmptyState(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onAction) { Text(actionLabel) }
+        if (actionLabel != null) {
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = onAction) { Text(actionLabel) }
+        }
     }
 }
 
@@ -1433,6 +1684,29 @@ private sealed interface UpdateDownloadState {
     data class Failed(val message: String) : UpdateDownloadState
 }
 
+/** A thin thumb tracking a plain [ScrollState]'s position/extent - unlike LazyColumn, a
+ * verticalScroll Column has no built-in scrollbar at all, so a long piece of text gave no hint
+ * there was more below the fold. Hidden entirely once everything fits (nothing to scroll). */
+@Composable
+private fun ScrollIndicator(scrollState: androidx.compose.foundation.ScrollState, modifier: Modifier = Modifier) {
+    if (scrollState.maxValue <= 0) return
+    var trackHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    Box(modifier.width(3.dp).onSizeChanged { trackHeightPx = it.height }) {
+        val viewportFraction = (trackHeightPx.toFloat() / (trackHeightPx + scrollState.maxValue)).coerceIn(0.1f, 1f)
+        val thumbHeightPx = trackHeightPx * viewportFraction
+        val progress = scrollState.value.toFloat() / scrollState.maxValue
+        val offsetPx = (trackHeightPx - thumbHeightPx) * progress
+        Box(
+            Modifier
+                .offset { IntOffset(0, offsetPx.roundToInt()) }
+                .width(3.dp)
+                .height(with(density) { thumbHeightPx.toDp() })
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f), RoundedCornerShape(2.dp))
+        )
+    }
+}
+
 /** Shows the release's changelog and lets the user decide whether to install it - tapping
  * "Установить" downloads the APK straight into the app (no browser round-trip) and hands it to
  * the system installer. Falls back to opening the GitHub release page only if a release somehow
@@ -1461,33 +1735,40 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
         onDismissRequest = { if (state !is UpdateDownloadState.Downloading) onDismiss() },
         title = { Text("Версия ${release.version}") },
         text = {
-            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                val current = state
-                when (current) {
-                    is UpdateDownloadState.Downloading -> {
-                        Text("Загрузка… ${current.percent}%")
-                        Spacer(Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            progress = { current.percent / 100f },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    is UpdateDownloadState.Failed -> {
-                        Text(current.message, color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(12.dp))
-                        Text(release.body)
-                    }
-                    UpdateDownloadState.Idle -> {
-                        if (release.apkUrl == null) {
-                            Text(
-                                "Файл сборки не найден в этом релизе.",
-                                color = MaterialTheme.colorScheme.error
+            // No visible scrollbar by default on a plain verticalScroll Column - with a long
+            // changelog entry there was nothing on screen hinting there was more to read below
+            // the fold. ScrollIndicator draws a thin thumb tracking scroll position/extent.
+            val scrollState = rememberScrollState()
+            Row(Modifier.heightIn(max = 360.dp)) {
+                Column(Modifier.weight(1f).verticalScroll(scrollState)) {
+                    val current = state
+                    when (current) {
+                        is UpdateDownloadState.Downloading -> {
+                            Text("Загрузка… ${current.percent}%")
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { current.percent / 100f },
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            Spacer(Modifier.height(12.dp))
                         }
-                        Text(release.body)
+                        is UpdateDownloadState.Failed -> {
+                            Text(current.message, color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(12.dp))
+                            ReleaseNoteBody(release.body)
+                        }
+                        UpdateDownloadState.Idle -> {
+                            if (release.apkUrl == null) {
+                                Text(
+                                    "Файл сборки не найден в этом релизе.",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.height(12.dp))
+                            }
+                            ReleaseNoteBody(release.body)
+                        }
                     }
                 }
+                ScrollIndicator(scrollState, modifier = Modifier.fillMaxHeight().padding(start = 4.dp))
             }
         },
         confirmButton = {

@@ -16,6 +16,7 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 
@@ -40,7 +41,7 @@ fun DownloadsScreen(
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.glassEffect()
+                modifier = Modifier.floatingChrome()
             )
         }
     ) { padding ->

@@ -48,6 +48,7 @@ import com.homecinema.library.data.db.SmbSourceEntity
 import com.homecinema.library.data.media.queryExternalPlayerApps
 import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.settings.SmbConfig
+import com.homecinema.library.data.settings.LibraryLayout
 import com.homecinema.library.data.settings.ThemeMode
 import com.homecinema.library.data.smb.toSmbUserMessage
 import com.homecinema.library.data.update.LOCAL_CHANGELOG
@@ -59,6 +60,7 @@ import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassContainerColor
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -284,8 +286,26 @@ fun AppearanceSettingsScreen(onBack: () -> Unit) {
     val glassOpacity by app.settingsStore.glassOpacityFlow.collectAsState(initial = 65)
     val gridColumns by app.settingsStore.gridColumnsFlow.collectAsState(initial = 2)
     val alphabetIndexEnabled by app.settingsStore.alphabetIndexEnabledFlow.collectAsState(initial = true)
+    val libraryLayout by app.settingsStore.libraryLayoutFlow.collectAsState(initial = LibraryLayout.BOTTOM_NAV)
 
     SettingsSubScreenScaffold(title = "Внешний вид", onBack = onBack) {
+        Column {
+            Text("Навигация по библиотеке", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Column(Modifier.selectableGroup()) {
+                RadioOption(
+                    label = "Новая — вкладки внизу",
+                    selected = libraryLayout == LibraryLayout.BOTTOM_NAV,
+                    onSelect = { scope.launch { app.settingsStore.saveLibraryLayout(LibraryLayout.BOTTOM_NAV) } }
+                )
+                RadioOption(
+                    label = "Классическая — вкладки и значки вверху",
+                    selected = libraryLayout == LibraryLayout.CLASSIC,
+                    onSelect = { scope.launch { app.settingsStore.saveLibraryLayout(LibraryLayout.CLASSIC) } }
+                )
+            }
+        }
+
         Column {
             Text("Тема", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(4.dp))
@@ -430,6 +450,22 @@ fun ChangelogScreen(onBack: () -> Unit) {
     }
 }
 
+/** Every ReleaseNote.body in LocalChangelog is already written as blank-line-separated points
+ * (one per feature/fix) - this was rendered as one dense wall of text before, with nothing
+ * visually separating a version's five different changes. Splitting on the same blank line and
+ * bulleting each piece needs no changes to the text itself, just how it's laid out. Shared by
+ * both the changelog screen and the "what's new" update dialog. */
+@Composable
+fun ReleaseNoteBody(body: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        val points = body.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
+        points.forEachIndexed { index, point ->
+            if (index > 0) Spacer(Modifier.height(8.dp))
+            Text("•  $point", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
 /** One version's row on the changelog screen - collapsed to just the version number by
  * default (accordion, only one open at a time) so a long release history doesn't turn back
  * into one long scroll, the exact problem the settings redesign just fixed elsewhere. */
@@ -460,7 +496,7 @@ private fun ChangelogEntryRow(release: ReleaseNote, expanded: Boolean, onToggle:
             AnimatedVisibility(visible = expanded) {
                 Column {
                     Spacer(Modifier.height(8.dp))
-                    Text(release.body, style = MaterialTheme.typography.bodyMedium)
+                    ReleaseNoteBody(release.body)
                 }
             }
         }
@@ -578,7 +614,7 @@ private fun SettingsSubScreenScaffold(
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.glassEffect()
+                modifier = Modifier.floatingChrome()
             )
         }
     ) { padding ->

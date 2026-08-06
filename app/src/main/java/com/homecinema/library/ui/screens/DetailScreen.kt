@@ -57,6 +57,7 @@ import com.homecinema.library.ui.components.ZoomableImageDialog
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.glassSheetContainerColor
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.flow.first
@@ -112,7 +113,7 @@ fun DetailScreen(
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.glassEffect()
+                modifier = Modifier.floatingChrome()
             )
         }
     ) { padding ->
@@ -650,6 +651,19 @@ suspend fun playExternally(context: Context, item: MediaItemEntity) {
         intent.putExtra("position", item.playbackPositionMs.toInt())
     }
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    // External players are a separate, black-box app - they never report position/progress
+    // back to us, so "Продолжить просмотр"/История had no way to know this title was ever
+    // opened at all. Best available proxy: record it as played now, keeping any already-known
+    // position/duration (e.g. from a previous internal-playback session) rather than
+    // clobbering it, and only inventing a minimal "just started" position - using .nfo runtime
+    // as a stand-in duration - for a title with no progress on record yet.
+    val knownDuration = item.durationMs.takeIf { it > 0 }
+        ?: item.runtimeMinutes?.let { it.toLong() * 60_000L }?.takeIf { it > 0 }
+    if (knownDuration != null) {
+        val position = item.playbackPositionMs.takeIf { it > 0 } ?: 6_000L
+        HomeCinemaApp.instance.repository.updatePlaybackProgress(item.id, position, knownDuration)
+    }
 
     val preferredPackage = HomeCinemaApp.instance.settingsStore.preferredExternalPlayerPackageFlow.first()
     if (preferredPackage.isNotBlank()) {

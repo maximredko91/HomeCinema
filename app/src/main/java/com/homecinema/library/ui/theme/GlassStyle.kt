@@ -2,6 +2,7 @@ package com.homecinema.library.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBarColors
@@ -88,6 +89,18 @@ fun Modifier.glassEffect(shape: Shape = RectangleShape): Modifier {
         this
     }
 }
+
+/** Same floating, edge-inset treatment used for the bottom navigation bar - a few dp of margin
+ * so chrome never sits flush against the true screen edge (where phones with strongly rounded/
+ * curved corners mask off pixels, clipping anything drawn right at the corner), plus rounded
+ * corners and the usual glass blur. Meant to replace a bare [glassEffect] wherever a screen's
+ * top bar would otherwise render full-bleed to the edges - apply it in place of that call. */
+@Composable
+fun Modifier.floatingChrome(shape: Shape = MaterialTheme.shapes.large): Modifier =
+    this
+        .padding(horizontal = 8.dp, vertical = 4.dp)
+        .clip(shape)
+        .glassEffect(shape = shape)
 
 val glassBorderBrush: Brush = Brush.linearGradient(
     colors = listOf(

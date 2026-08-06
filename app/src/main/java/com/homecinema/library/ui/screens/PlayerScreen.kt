@@ -207,14 +207,18 @@ fun PlayerScreen(itemId: String) {
     }
 
     // Periodic checkpoint while playing, in addition to the on-dispose save above, so
-    // progress survives a process kill (not just navigating away normally).
+    // progress survives a process kill (not just navigating away normally). The delay used to
+    // run BEFORE the first write, so lastPlayedAt (and with it, this title showing up in
+    // История) lagged the actual start of playback by up to 5s - checking right after opening
+    // something could miss it entirely. Delay now runs after, so the first checkpoint fires as
+    // soon as duration is known instead of waiting out a full cycle first.
     LaunchedEffect(activePlayer) {
         while (isActive) {
-            delay(5000)
             val duration = activePlayer.duration
             if (activePlayer.isPlaying && duration > 0) {
                 app.repository.updatePlaybackProgress(itemId, activePlayer.currentPosition, duration)
             }
+            delay(5000)
         }
     }
 

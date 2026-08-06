@@ -15,6 +15,9 @@ import com.homecinema.library.data.update.ReleaseInfo
 import com.homecinema.library.data.update.UpdateChecker
 import com.homecinema.library.data.update.isNewerVersion
 import androidx.core.content.getSystemService
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -31,6 +34,11 @@ import kotlinx.coroutines.launch
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.Security
 import java.util.concurrent.TimeUnit
+
+/** The last versionCode that changed what LibraryScanner reads from .nfo (v1.13.01 added
+ * studio/mpaa/tagline) - see [HomeCinemaApp.checkForRescanSuggestion]. Bump this only when a
+ * future release genuinely adds/changes scanned .nfo fields, not on every release. */
+private const val RESCAN_NEEDED_SINCE_VERSION_CODE = 19
 
 /**
  * Simple hand-rolled service locator (no Hilt/Dagger to keep the project
@@ -88,8 +96,18 @@ class HomeCinemaApp : Application() {
         createDownloadNotificationChannel()
         createStreamingNotificationChannel()
         scheduleAutoRescan()
-        checkForUpdate()
         checkForRescanSuggestion()
+
+        // onStart fires once right away too (covers the cold-start case checkForUpdate() used
+        // to be called for directly here), then again every time the app comes back to the
+        // foreground from the background - a plain onCreate()-only check only ever ran once
+        // per process, so a version released while the app sat backgrounded (not force-stopped)
+        // never got noticed until the user killed and relaunched it.
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                checkForUpdate()
+            }
+        })
 
         applicationScope.launch { repository.migrateLegacySourceIfNeeded(settingsStore) }
     }
@@ -125,7 +143,13 @@ class HomeCinemaApp : Application() {
                 packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
             }.getOrNull() ?: return@launch
             val lastSeen = settingsStore.lastSeenVersionCodeFlow.first()
-            if (lastSeen != 0 && lastSeen < currentVersionCode) {
+            // Only when the user's last-seen version actually predates the last release that
+            // added new scannable .nfo fields (studio/mpaa/tagline, in v1.13.01/versionCode 19)
+            // - comparing against "any newer version at all" instead nagged the user to rescan
+            // after every single update, including ones that changed nothing a scan would pick
+            // up (UI tweaks, bug fixes). Update RESCAN_NEEDED_SINCE_VERSION_CODE only when a
+            // future release genuinely adds/changes what the scanner reads from .nfo.
+            if (lastSeen != 0 && lastSeen < RESCAN_NEEDED_SINCE_VERSION_CODE && currentVersionCode >= RESCAN_NEEDED_SINCE_VERSION_CODE) {
                 _rescanSuggested.value = true
             }
             settingsStore.setLastSeenVersionCode(currentVersionCode)

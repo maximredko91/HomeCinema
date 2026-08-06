@@ -7,6 +7,8 @@ import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.scanner.ScanProgress
+import com.homecinema.library.data.settings.LibraryLayout
+import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.update.ReleaseInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,6 +169,12 @@ class LibraryViewModel : ViewModel() {
 
     val gridColumns: StateFlow<Int> = app.settingsStore.gridColumnsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 2)
+
+    val libraryLayout: StateFlow<LibraryLayout> = app.settingsStore.libraryLayoutFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryLayout.BOTTOM_NAV)
+
+    val playbackMode: StateFlow<PlaybackMode> = app.settingsStore.playbackModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PlaybackMode.ASK)
 
     /** In-progress movies/cartoons/episodes, most recently played first. */
     val continueWatching: StateFlow<List<MediaItemEntity>> = app.repository.observeContinueWatching()

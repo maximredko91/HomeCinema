@@ -34,6 +34,12 @@ enum class PlaybackMode { INTERNAL, EXTERNAL, ASK }
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK, OLED, GLASS }
 
+/** Which chrome LibraryScreen renders itself with - CLASSIC is the original top-bar-and-tabs
+ * layout (unchanged), BOTTOM_NAV moves primary navigation to a bottom bar. Kept as a real user
+ * choice (not a one-time migration) since the redesign is a big enough change in daily-use feel
+ * that reverting should be one tap, not a rebuild. */
+enum class LibraryLayout { CLASSIC, BOTTOM_NAV }
+
 class SettingsStore(private val context: Context) {
 
     private object Keys {
@@ -57,6 +63,7 @@ class SettingsStore(private val context: Context) {
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
         val LAST_SEEN_VERSION_CODE = intPreferencesKey("last_seen_version_code")
         val PREFERRED_EXTERNAL_PLAYER_PACKAGE = stringPreferencesKey("preferred_external_player_package")
+        val LIBRARY_LAYOUT = stringPreferencesKey("library_layout")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -114,6 +121,17 @@ class SettingsStore(private val context: Context) {
     suspend fun saveThemeMode(mode: ThemeMode) {
         context.dataStore.edit { prefs ->
             prefs[Keys.THEME_MODE] = mode.name
+        }
+    }
+
+    val libraryLayoutFlow: Flow<LibraryLayout> = context.dataStore.data.map { prefs ->
+        runCatching { LibraryLayout.valueOf(prefs[Keys.LIBRARY_LAYOUT] ?: "BOTTOM_NAV") }
+            .getOrDefault(LibraryLayout.BOTTOM_NAV)
+    }
+
+    suspend fun saveLibraryLayout(layout: LibraryLayout) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LIBRARY_LAYOUT] = layout.name
         }
     }
 

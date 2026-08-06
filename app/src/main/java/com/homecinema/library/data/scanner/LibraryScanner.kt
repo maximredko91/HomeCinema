@@ -102,10 +102,17 @@ class LibraryScanner(
             dao.deleteMissingTopLevel(allResults.filter { it.mediaType != MediaType.EPISODE }.map { it.folderPath })
             dao.deleteMissingEpisodes(allResults.filter { it.mediaType == MediaType.EPISODE }.map { it.id })
 
+            // allResults.size counts every episode individually too, alongside movies/shows -
+            // accurate for the cleanup calls above, but a very different number from what the
+            // user actually sees as "titles" in the library grid (a show is one card, however
+            // many episodes it has). Reported count excludes episodes for the same reason
+            // effectiveColumns/totalFolders exclude season subfolders elsewhere in this file -
+            // it should mean "how many cards did this add", not "how many rows got written".
+            val topLevelCount = allResults.count { it.mediaType != MediaType.EPISODE }
             if (errors.isNotEmpty()) {
-                onProgress(ScanProgress.Error("Найдено ${allResults.size} тайтлов. Ошибки: ${errors.joinToString("; ")}"))
+                onProgress(ScanProgress.Error("Найдено $topLevelCount тайтлов. Ошибки: ${errors.joinToString("; ")}"))
             } else {
-                onProgress(ScanProgress.Done(allResults.size))
+                onProgress(ScanProgress.Done(topLevelCount))
             }
         } catch (e: Exception) {
             onProgress(ScanProgress.Error(e.toSmbUserMessage()))
@@ -347,7 +354,13 @@ class LibraryScanner(
                     downloadProgress = existing.downloadProgress,
                     playbackPositionMs = existing.playbackPositionMs,
                     durationMs = existing.durationMs,
-                    lastPlayedAt = existing.lastPlayedAt
+                    lastPlayedAt = existing.lastPlayedAt,
+                    // isFavorite is pure user state, never derived from .nfo - missing from
+                    // this list meant every rescan (including the nightly automatic one)
+                    // silently reset every title's favorite flag back to false. Real data
+                    // loss, not just a cosmetic gap: confirmed by a user losing everything
+                    // they'd favorited across earlier versions.
+                    isFavorite = existing.isFavorite
                 )
             } ?: fresh
         }
