@@ -16,10 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessMedium
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.ClosedCaptionOff
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,9 +34,6 @@ import com.homecinema.library.R
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -60,9 +54,9 @@ import java.io.File
 import kotlin.math.roundToInt
 
 /** A sidecar subtitle file, attached to the MediaItem so DefaultMediaSourceFactory wires it
- * up itself - SELECTION_FLAG_DEFAULT auto-selects it for playback, after which the existing CC
- * toggle (which already governs C.TRACK_TYPE_TEXT) can turn it on/off same as any subtitle
- * track muxed inside the container. */
+ * up itself - SELECTION_FLAG_DEFAULT auto-selects it for playback, after which it shows up as
+ * just another text track in the player's own native settings menu (audio/captions/speed),
+ * same as any subtitle track muxed inside the container. */
 private fun buildSubtitleConfiguration(uri: Uri, extension: String): MediaItem.SubtitleConfiguration =
     MediaItem.SubtitleConfiguration.Builder(uri)
         .setMimeType(subtitleMimeType(extension))
@@ -72,27 +66,10 @@ private fun buildSubtitleConfiguration(uri: Uri, extension: String): MediaItem.S
 
 private enum class GestureIndicatorMode { NONE, BRIGHTNESS, VOLUME }
 
-private data class AudioTrackOption(
-    val group: Tracks.Group,
-    val trackIndex: Int,
-    val label: String,
-    val selected: Boolean
-)
-
-private fun audioOptionsFrom(tracks: Tracks): List<AudioTrackOption> =
-    tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }.flatMap { group ->
-        (0 until group.length).map { i ->
-            val format = group.getTrackFormat(i)
-            val label = format.language?.uppercase() ?: format.label ?: "Дорожка ${i + 1}"
-            AudioTrackOption(group, i, label, group.isTrackSelected(i))
-        }
-    }
-
 /** Don't offer to resume something that's basically already finished - just start over. */
 internal fun shouldResume(positionMs: Long, durationMs: Long): Boolean =
     positionMs > 5_000L && (durationMs <= 0L || positionMs < durationMs * 0.95)
 
-@OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(itemId: String) {
     val app = HomeCinemaApp.instance
@@ -103,10 +80,6 @@ fun PlayerScreen(itemId: String) {
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var controllerVisible by remember { mutableStateOf(true) }
-    var subtitlesEnabled by remember { mutableStateOf(true) }
-    var hasSubtitleTrack by remember { mutableStateOf(false) }
-    var audioOptions by remember { mutableStateOf<List<AudioTrackOption>>(emptyList()) }
-    var playerSettingsMenuOpen by remember { mutableStateOf(false) }
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
@@ -247,11 +220,6 @@ fun PlayerScreen(itemId: String) {
 
     DisposableEffect(activePlayer) {
         val listener = object : Player.Listener {
-            override fun onTracksChanged(tracks: Tracks) {
-                hasSubtitleTrack = tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }
-                audioOptions = audioOptionsFrom(tracks)
-            }
-
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     val duration = activePlayer.duration
@@ -262,8 +230,6 @@ fun PlayerScreen(itemId: String) {
             }
         }
         activePlayer.addListener(listener)
-        hasSubtitleTrack = activePlayer.currentTracks.groups.any { it.type == C.TRACK_TYPE_TEXT }
-        audioOptions = audioOptionsFrom(activePlayer.currentTracks)
         onDispose { activePlayer.removeListener(listener) }
     }
 
@@ -278,6 +244,13 @@ fun PlayerScreen(itemId: String) {
                 // covering - sound plays but there's no picture or visible controller.
                 (LayoutInflater.from(ctx).inflate(R.layout.player_view, null) as PlayerView).apply {
                     player = activePlayer
+                    // The native control bar already has a settings (⚙) button - handles audio
+                    // track + playback speed automatically, no code needed. Subtitle on/off
+                    // wasn't part of that by default though, so this turns on its dedicated CC
+                    // button in the same bar. A custom Compose settings menu used to duplicate
+                    // this - removed, since it just meant two "gear" controls fighting for the
+                    // same corner instead of the one native panel doing the whole job.
+                    setShowSubtitleButton(true)
                     setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility -> controllerVisible = visibility == View.VISIBLE }
                     )
@@ -331,62 +304,12 @@ fun PlayerScreen(itemId: String) {
 
         if (indicatorMode != GestureIndicatorMode.NONE) {
             GestureIndicator(
-                icon = if (indicatorMode == GestureIndicatorMode.BRIGHTNESS) Icons.Default.BrightnessMedium else Icons.Default.VolumeUp,
+                icon = if (indicatorMode == GestureIndicatorMode.BRIGHTNESS) Icons.Default.BrightnessMedium else Icons.AutoMirrored.Filled.VolumeUp,
                 level = if (indicatorMode == GestureIndicatorMode.BRIGHTNESS) brightness else volume,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
 
-        Row(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
-            // One combined settings menu rather than a separate always-on-screen icon per
-            // option - a standalone subtitle icon stuck around looking clickable even for a
-            // video with no subtitle track at all, which read as broken/stuck rather than
-            // "nothing to toggle here".
-            if (audioOptions.size > 1 || hasSubtitleTrack) {
-                Box {
-                    IconButton(onClick = { playerSettingsMenuOpen = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Настройки воспроизведения", tint = Color.White)
-                    }
-                    DropdownMenu(expanded = playerSettingsMenuOpen, onDismissRequest = { playerSettingsMenuOpen = false }) {
-                        if (hasSubtitleTrack) {
-                            DropdownMenuItem(
-                                text = { Text("Субтитры") },
-                                onClick = {
-                                    subtitlesEnabled = !subtitlesEnabled
-                                    activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
-                                        .buildUpon()
-                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
-                                        .build()
-                                    playerSettingsMenuOpen = false
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = if (subtitlesEnabled) Icons.Default.ClosedCaption else Icons.Default.ClosedCaptionOff,
-                                        contentDescription = null
-                                    )
-                                }
-                            )
-                        }
-                        if (audioOptions.size > 1) {
-                            if (hasSubtitleTrack) HorizontalDivider()
-                            audioOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.label) },
-                                    onClick = {
-                                        activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
-                                            .buildUpon()
-                                            .setOverrideForType(TrackSelectionOverride(option.group.mediaTrackGroup, option.trackIndex))
-                                            .build()
-                                        playerSettingsMenuOpen = false
-                                    },
-                                    leadingIcon = { RadioButton(selected = option.selected, onClick = null) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -405,7 +328,7 @@ private fun GestureIndicator(icon: ImageVector, level: Float, modifier: Modifier
             Icon(icon, contentDescription = null, tint = Color.White)
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(
-                progress = level,
+                progress = { level },
                 modifier = Modifier.width(90.dp),
                 color = Color.White,
                 trackColor = Color.White.copy(alpha = 0.3f)

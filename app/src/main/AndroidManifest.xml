@@ -11,6 +11,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Android 11+ package visibility: without this, PackageManager.queryIntentActivities()
+         only returns system apps to a third-party app - a real, installed player like MX
+         Player was invisible to the "always use this player" list in Settings (confirmed via
+         logcat: getApplicationInfo() for its package returned nothing) even though actually
+         launching it via startActivity() worked fine, since Android grants visibility into
+         whatever the OS itself resolves for an intent actually being sent, just not for this
+         kind of ahead-of-time enumeration. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".HomeCinemaApp"
         android:allowBackup="true"

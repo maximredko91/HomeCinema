@@ -119,7 +119,7 @@ fun MediaPosterCard(
                 }
             } else if (progressFraction > 0.02f) {
                 LinearProgressIndicator(
-                    progress = progressFraction,
+                    progress = { progressFraction },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()

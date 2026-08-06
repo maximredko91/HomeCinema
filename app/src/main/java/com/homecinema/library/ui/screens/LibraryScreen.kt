@@ -26,7 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FilterList
@@ -76,8 +76,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Add
-import com.homecinema.library.ui.theme.LocalIsGlassTheme
-import com.homecinema.library.ui.theme.glassContainerColor
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.glassSheetContainerColor
@@ -86,6 +84,45 @@ import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import java.io.File
+
+/** The content width (screen width minus the grid's own horizontal padding) "Число колонок" in
+ * Settings is implicitly calibrated against - a normal portrait phone. See the effectiveColumns
+ * comment in LibraryGrid for why this matters. */
+private const val REFERENCE_GRID_WIDTH_DP = 360f
+
+/** "Число колонок" in Settings is calibrated against a normal portrait phone width - reused
+ * verbatim in landscape (or on a tablet) it left every card roughly 2-3x wider, and since
+ * posters keep a fixed aspect ratio, 2-3x taller too - tall enough to not fit on screen at all.
+ * Scales the column count up with the extra width first, so each card stays close to the size
+ * the user actually picked regardless of orientation - but width alone isn't enough: rotating
+ * to landscape shrinks the available HEIGHT by far more than it grows the width, so a card
+ * merely "sized like portrait" can still be taller than the entire screen (posters keep a tall
+ * 2:3 aspect ratio). The second pass keeps adding columns - shrinking every card a bit more -
+ * until at least ~1.4 rows actually fit vertically. Shared by the Библиотека/Коллекции/Списки
+ * grids - each has its own LazyVerticalGrid, and all three had this same problem. */
+@Composable
+private fun rememberEffectiveColumns(
+    gridColumns: Int,
+    availableWidth: androidx.compose.ui.unit.Dp,
+    availableHeight: androidx.compose.ui.unit.Dp
+): Int =
+    remember(gridColumns, availableWidth, availableHeight) {
+        val widthScale = availableWidth.value / REFERENCE_GRID_WIDTH_DP
+        var columns = (gridColumns * widthScale).roundToInt().coerceAtLeast(gridColumns)
+
+        val horizontalPadding = 32f // 16dp start + 16dp end content padding
+        val spacing = 12f // horizontalArrangement spacing between columns
+        val posterAspect = 2f / 3f // width / height
+        val titleAreaHeight = 56f // title (up to 2 lines) + subtitle + spacer below the poster
+        val minVisibleRows = 1.4f
+        while (columns < gridColumns + 8) {
+            val cardWidth = (availableWidth.value - horizontalPadding - spacing * (columns - 1)) / columns
+            val cardHeight = cardWidth / posterAspect + titleAreaHeight
+            if (cardHeight * minVisibleRows <= availableHeight.value) break
+            columns++
+        }
+        columns
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,16 +178,30 @@ fun LibraryScreen(
         else -> customLists.firstOrNull { it.id == selectedListId }?.name
     }
 
-    // Two-way sync between the pager (swipe) and the ViewModel's tab state (tap on TabRow) -
-    // each guards against re-triggering the other once they already agree, so this settles
-    // rather than ping-ponging.
-    LaunchedEffect(pagerState.currentPage) {
-        val tab = LibraryTab.entries[pagerState.currentPage]
+    // Two-way sync between the pager (swipe) and the ViewModel's tab state (tap on TabRow).
+    // Switching from currentPage to settledPage (previous fix) stopped a multi-page tap (e.g.
+    // Библиотека -> Списки, animating through Коллекции) from reporting the page it's merely
+    // passing through as a real stop - but settledPage still isn't guaranteed to hold at the
+    // ORIGIN page for the animation's entire duration on every Pager version/timing, and even
+    // one spurious mid-flight report is enough: it calls setLibraryTab with the wrong tab,
+    // which re-keys the second effect below and cancels the in-flight animateScrollToPage
+    // before it ever reaches the real target - the net effect being a tap that visibly does
+    // nothing (settles back at the origin) rather than landing on the wrong page. A tab tap
+    // already knows its destination before the pager moves at all, so syncing the pager's
+    // position back to the tab state while that same tap's animation is still running is
+    // never needed - this flag suppresses it structurally instead of trusting the exact
+    // instant settledPage flips.
+    var animatingFromTabTap by remember { mutableStateOf(false) }
+    LaunchedEffect(pagerState.settledPage) {
+        if (animatingFromTabTap) return@LaunchedEffect
+        val tab = LibraryTab.entries[pagerState.settledPage]
         if (tab != libraryTab) viewModel.setLibraryTab(tab)
     }
     LaunchedEffect(libraryTab) {
         if (pagerState.currentPage != libraryTab.ordinal) {
+            animatingFromTabTap = true
             pagerState.animateScrollToPage(libraryTab.ordinal)
+            animatingFromTabTap = false
         }
     }
 
@@ -229,15 +280,15 @@ fun LibraryScreen(
                 navigationIcon = {
                     if (searchActive) {
                         IconButton(onClick = { closeSearch() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Закрыть поиск")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Закрыть поиск")
                         }
                     } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
                         IconButton(onClick = { viewModel.clearCollectionSelection() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "К списку коллекций")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку коллекций")
                         }
                     } else if (libraryTab == LibraryTab.LISTS && selectedListId != null) {
                         IconButton(onClick = { viewModel.clearListSelection() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "К списку списков")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку списков")
                         }
                     }
                 },
@@ -286,7 +337,7 @@ fun LibraryScreen(
                 )
             }
             if (configured) {
-                TabRow(selectedTabIndex = libraryTab.ordinal) {
+                PrimaryTabRow(selectedTabIndex = libraryTab.ordinal) {
                     Tab(
                         selected = libraryTab == LibraryTab.ALL,
                         onClick = { viewModel.setLibraryTab(LibraryTab.ALL) },
@@ -482,7 +533,14 @@ private fun LibraryGrid(
     }
 
     Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f)) {
+            BoxWithConstraints(Modifier.weight(1f)) {
+                // "Число колонок" in Settings is chosen against a normal portrait phone width -
+                // reused as-is in landscape (or on a tablet), it left every card roughly 2-3x
+                // wider (and, since posters keep a fixed aspect ratio, 2-3x taller too) than
+                // intended, tall enough to not fit on screen at all. Scales the column count up
+                // with the extra width instead, so each card stays close to the size the user
+                // actually picked regardless of orientation - never scales below their setting.
+                val effectiveColumns = rememberEffectiveColumns(gridColumns, maxWidth, maxHeight)
                 when {
                     !configured -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
                         EmptyState(
@@ -510,7 +568,7 @@ private fun LibraryGrid(
                     }
                     else -> LazyVerticalGrid(
                         state = gridState,
-                        columns = GridCells.Fixed(gridColumns),
+                        columns = GridCells.Fixed(effectiveColumns),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -637,7 +695,7 @@ private fun ContinueWatchingCard(item: MediaItemEntity, onClick: () -> Unit, onD
                 }
             }
             LinearProgressIndicator(
-                progress = progressFraction,
+                progress = { progressFraction },
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = Color.Black.copy(alpha = 0.4f)
@@ -680,10 +738,11 @@ private fun CollectionsGrid(
                 onAction = onOpenSettings
             )
         }
-        else -> Box(Modifier.fillMaxSize()) {
+        else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+            val effectiveColumns = rememberEffectiveColumns(gridColumns, maxWidth, maxHeight)
             LazyVerticalGrid(
                 state = gridState,
-                columns = GridCells.Fixed(gridColumns),
+                columns = GridCells.Fixed(effectiveColumns),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -722,10 +781,11 @@ private fun ListsGrid(
     var listToRename by remember { mutableStateOf<CustomListEntity?>(null) }
     var listToDelete by remember { mutableStateOf<CustomListEntity?>(null) }
 
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val effectiveColumns = rememberEffectiveColumns(gridColumns, maxWidth, maxHeight)
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Fixed(gridColumns),
+            columns = GridCells.Fixed(effectiveColumns),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = topContentPadding + 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -958,7 +1018,15 @@ private fun CollectionCard(collection: CollectionSummary, onClick: () -> Unit) {
     }
 }
 
-/** Small floating buttons to jump straight to the top or bottom of a long grid. */
+/** Small floating buttons to jump straight to the top or bottom of a long grid.
+ *
+ * Deliberately its own fixed dark/opaque look, not participating in the Glass theme's blur or
+ * any theme-dependent color branching - two rounds of chasing a reported visual glitch here
+ * (a stray square rendering alongside the arrow) through the glass-blur/shape-matching/content-
+ * color machinery never actually confirmed a cause, since it couldn't be reproduced or seen up
+ * close from here. Removing that machinery entirely removes whatever was producing it, and a
+ * plain neutral floating control over a poster grid is a normal enough pattern on its own -
+ * it doesn't need to look like the glass panels to read as "belonging" to the screen. */
 @Composable
 private fun ScrollJumpButtons(
     gridState: LazyGridState,
@@ -969,27 +1037,40 @@ private fun ScrollJumpButtons(
     val canScrollUp = gridState.canScrollBackward
     val canScrollDown = gridState.canScrollForward
     if (!canScrollUp && !canScrollDown) return
-    val isGlass = LocalIsGlassTheme.current
-    val fabShape = MaterialTheme.shapes.small
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (canScrollUp) {
-            SmallFloatingActionButton(
-                onClick = { scope.launch { gridState.animateScrollToItem(0) } },
-                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor,
-                modifier = Modifier.glassEffect(shape = fabShape)
-            ) {
-                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "В начало списка")
-            }
+            ScrollJumpButton(
+                icon = Icons.Default.KeyboardArrowUp,
+                contentDescription = "В начало списка",
+                onClick = { scope.launch { gridState.animateScrollToItem(0) } }
+            )
         }
         if (canScrollDown) {
-            SmallFloatingActionButton(
-                onClick = { scope.launch { gridState.animateScrollToItem((itemCount - 1).coerceAtLeast(0)) } },
-                containerColor = if (isGlass) glassContainerColor else FloatingActionButtonDefaults.containerColor,
-                modifier = Modifier.glassEffect(shape = fabShape)
-            ) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "В конец списка")
-            }
+            ScrollJumpButton(
+                icon = Icons.Default.KeyboardArrowDown,
+                contentDescription = "В конец списка",
+                onClick = { scope.launch { gridState.animateScrollToItem((itemCount - 1).coerceAtLeast(0)) } }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScrollJumpButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    // No shadowElevation - a drop shadow behind a CircleShape needs Android to compute an
+    // outline to cast it from, and on some devices/GPU drivers that outline comes out as a
+    // low-vertex polygon (reported: an octagon) instead of a true circle. Skipping the shadow
+    // avoids that code path entirely rather than chasing which devices mis-render it.
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(44.dp),
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.55f),
+        contentColor = Color.White
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(icon, contentDescription = contentDescription)
         }
     }
 }
@@ -1512,7 +1593,7 @@ private fun ScanProgressBanner(
                 is ScanProgress.Scanning -> {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text("Обход папок на диске… найдено файлов: ${progress.filesFound}")
+                    Text("Обход папок на диске… найдено видео: ${progress.filesFound}")
                 }
                 is ScanProgress.Parsing -> {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)

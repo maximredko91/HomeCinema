@@ -35,6 +35,7 @@ sealed class ScanProgress {
 }
 
 private val VIDEO_EXTENSIONS = setOf("mkv", "mp4", "avi", "mov", "m4v", "ts", "wmv", "webm")
+private const val SCANNING_PROGRESS_STEP = 5
 private val POSTER_NAMES = setOf("poster.jpg", "poster.png", "folder.jpg", "folder.png", "cover.jpg", "cover.png")
 private val FANART_NAMES = setOf("fanart.jpg", "fanart.png", "backdrop.jpg", "backdrop.png", "landscape.jpg", "landscape.png")
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
@@ -116,8 +117,17 @@ class LibraryScanner(
      * [flush] as each show/batch of movies finishes, not from this return value). */
     private suspend fun scanSource(source: SmbSourceEntity, onProgress: (ScanProgress) -> Unit): List<MediaItemEntity> {
         val config = sourceResolver.withRealPassword(source).toSmbConfig()
-        val allFiles = smbManager.listAllFilesRecursive(source.id, config)
-        onProgress(ScanProgress.Scanning(allFiles.size))
+        // Only video files count toward the "Обход папок… найдено: N" progress line - the
+        // raw file count (every .nfo/.srt/poster/fanart alongside each video) used to show
+        // there instead, which read as noise unrelated to "how much media is there".
+        val videoCount = AtomicInteger(0)
+        val allFiles = smbManager.listAllFilesRecursive(source.id, config) { file ->
+            if (extensionOf(file.name) in VIDEO_EXTENSIONS) {
+                val count = videoCount.incrementAndGet()
+                if (count % SCANNING_PROGRESS_STEP == 0) onProgress(ScanProgress.Scanning(count))
+            }
+        }
+        onProgress(ScanProgress.Scanning(videoCount.get()))
 
         val byFolder = allFiles.groupBy { parentPath(it) }
 
@@ -130,7 +140,15 @@ class LibraryScanner(
             showRootPaths.firstOrNull { root -> folderPath == root || folderPath.startsWith(root) }
 
         val results = mutableListOf<MediaItemEntity>()
-        val totalFolders = byFolder.size
+        // Folders that will actually get their own "Разбор X/Y" progress tick - one per show
+        // root (not one per season subfolder underneath it, those episodes get swept in without
+        // their own tick) plus one per standalone movie folder. byFolder.size (every folder
+        // found, including season subfolders and any folder with no video at all) is always
+        // bigger than this whenever a show has season subfolders - using it as the denominator
+        // meant the counter could never reach 100% of its own total even once the scan had
+        // genuinely finished everything there was to process.
+        val movieFolders = byFolder.keys.filter { showRootFor(it) == null }
+        val totalFolders = showRootPaths.size + movieFolders.size
         val processed = AtomicInteger(0)
 
         // Pass 2: one shell entity per show root, from its tvshow.nfo + poster, plus every
@@ -198,8 +216,8 @@ class LibraryScanner(
 
         // Pass 3: everything else - standalone movies/cartoons, one per remaining folder.
         // Same concurrency treatment, batched so the library fills in as it goes rather
-        // than staying empty until all several thousand folders are done.
-        val movieFolders = byFolder.keys.filter { showRootFor(it) == null }
+        // than staying empty until all several thousand folders are done. (movieFolders
+        // computed above, alongside showRootPaths, for the totalFolders progress denominator.)
         for (chunk in movieFolders.chunked(FLUSH_BATCH_SIZE)) {
             val entities = coroutineScope {
                 chunk.map { folderPath ->

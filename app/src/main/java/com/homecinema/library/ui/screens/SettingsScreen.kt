@@ -12,7 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
@@ -492,14 +492,17 @@ fun AboutScreen(onBack: () -> Unit) {
 
         AboutSubsection(title = "Возможности", icon = Icons.Default.Movie) {
             listOf(
-                "Несколько источников SMB одновременно, автообновление библиотеки при запуске",
-                "Автосканирование по .nfo (формат Kodi): обложки, кадры (fanart) с просмотром на весь экран, миниатюры серий",
-                "Категории (фильмы/сериалы/мультфильмы/мультсериалы) и коллекции по тегу <set>",
-                "Поиск по названию, описанию и актёрам; фильтры по жанру и году; сортировка; настраиваемое число колонок; алфавитный указатель",
-                "«Продолжить просмотр» с прерванного места и отметка просмотренного",
+                "Несколько источников SMB одновременно, автообновление библиотеки по расписанию",
+                "Автосканирование по .nfo (формат Kodi): обложки, кадры (fanart) с просмотром на весь экран, сайдкар-субтитры, миниатюры серий",
+                "Категории (фильмы/сериалы/мультфильмы/мультсериалы), коллекции по тегу <set>, свои списки и избранное",
+                "Поиск по названию, описанию, актёрам и тегам — #тег понимает запрос на русском; история поиска",
+                "Фильтры по жанру и году, сортировка, настраиваемое число колонок (масштабируется под альбомную ориентацию), алфавитный указатель",
+                "«Продолжить просмотр» с прерванного места, отметка просмотренного и отдельный экран истории просмотров",
                 "Загрузка на устройство для просмотра офлайн",
                 "Плеер: субтитры, переключение аудиодорожек, жесты яркости/громкости, полноэкранный режим",
-                "Темы: системная, светлая, тёмная, OLED и «Стекло» — с выбором акцентного цвета",
+                "Выбор внешнего плеера — спрашивать каждый раз или закрепить конкретное приложение",
+                "Темы: системная, светлая, тёмная, OLED и «Стекло» (настоящее размытие фона) — с выбором акцентного цвета",
+                "Проверка обновлений на GitHub и установка новой версии прямо в приложении",
                 "Пароли SMB-источников хранятся зашифрованными (Android Keystore), не в открытом виде"
             ).forEach { BulletLine(it) }
         }
@@ -523,7 +526,8 @@ fun AboutScreen(onBack: () -> Unit) {
                 "AndroidX (Compose, Navigation, Room, DataStore, Media3, Lifecycle, Security-Crypto) — Apache License 2.0",
                 "Coil — Apache License 2.0",
                 "jcifs-ng — GNU Lesser General Public License v2.1",
-                "Bouncy Castle — Bouncy Castle License (аналог MIT)"
+                "Bouncy Castle — Bouncy Castle License (аналог MIT)",
+                "Русско-английский словарь для поиска по тегам — FreeDict / WikDict, на основе Wiktionary.org — Creative Commons Attribution-ShareAlike 3.0"
             ).forEach { BulletLine(it) }
         }
     }
@@ -570,7 +574,7 @@ private fun SettingsSubScreenScaffold(
                 title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),

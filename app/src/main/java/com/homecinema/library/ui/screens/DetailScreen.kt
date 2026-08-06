@@ -16,12 +16,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +50,7 @@ import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.smb.toSmbConfig
 import com.homecinema.library.data.streaming.StreamingService
 import com.homecinema.library.data.streaming.mimeTypeForExtension
+import com.homecinema.library.ui.components.DetailActionButtonHeight
 import com.homecinema.library.ui.components.DownloadControlRow
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.components.ZoomableImageDialog
@@ -87,7 +95,7 @@ fun DetailScreen(
                 title = { Text(item?.title.orEmpty()) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 actions = {
@@ -99,7 +107,7 @@ fun DetailScreen(
                             )
                         }
                         IconButton(onClick = { addToListSheetOpen = true }) {
-                            Icon(Icons.Default.PlaylistAdd, contentDescription = "Добавить в список")
+                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Добавить в список")
                         }
                     }
                 },
@@ -110,6 +118,24 @@ fun DetailScreen(
     ) { padding ->
         val current = item ?: return@Scaffold
         val isShow = current.mediaType == MediaType.TV_SHOW || current.mediaType == MediaType.CARTOON_SERIES
+
+        // Same sidecar-subtitle lookup playExternally() already does (local file listing, or a
+        // best-effort/timeout-guarded SMB folder listing for a not-yet-downloaded title) - run
+        // once per item just to know whether to show the "Субтитры" badge below, not to
+        // actually attach anything.
+        var hasSubtitles by remember(current.id) { mutableStateOf<Boolean?>(null) }
+        LaunchedEffect(current.id) {
+            val localPath = current.localFilePath
+            hasSubtitles = if (localPath != null && File(localPath).exists()) {
+                findLocalSiblingSubtitle(File(localPath)) != null
+            } else {
+                val source = app.repository.getSource(current.sourceId)
+                source != null && withTimeoutOrNull(3000) {
+                    runCatching { app.smbManager.findSiblingSubtitle(source.id, source.toSmbConfig(), current.videoFilePath) }
+                        .getOrNull()
+                } != null
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -167,20 +193,21 @@ fun DetailScreen(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
                     val releaseQuality = remember(current.videoFilePath) {
                         extractReleaseQuality(current.videoFilePath.substringAfterLast('/'))
                     }
-                    val meta = buildList {
-                        current.year?.let { add(it.toString()) }
-                        current.rating?.let { add("★ ${"%.1f".format(it)}") }
-                        current.runtimeMinutes?.let { add("$it мин") }
-                        current.country?.takeIf { it.isNotBlank() }?.let { add(it) }
-                        current.mpaa?.takeIf { it.isNotBlank() }?.let { add(it) }
-                        releaseQuality?.let { add(it) }
-                    }.joinToString("  •  ")
-                    if (meta.isNotBlank()) {
-                        Text(meta, style = MaterialTheme.typography.bodyMedium)
+                    // Each chip gets an icon, not just a bare number/word - "2021" or "110 мин"
+                    // reads fine once you know it's a year or a runtime, but nothing on the
+                    // chip itself said which was which.
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        current.year?.let { MetaChip(it.toString(), icon = Icons.Default.CalendarMonth) }
+                        current.rating?.let { MetaChip("%.1f".format(it), icon = Icons.Default.Star) }
+                        current.runtimeMinutes?.let { MetaChip("$it мин", icon = Icons.Default.Schedule) }
+                        current.country?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Public) }
+                        current.mpaa?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Shield) }
+                        releaseQuality?.let { MetaChip(it, icon = Icons.Default.HighQuality) }
+                        if (hasSubtitles == true) MetaChip("Субтитры", icon = Icons.Default.ClosedCaption)
                     }
                     if (current.genres.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
@@ -196,13 +223,20 @@ fun DetailScreen(
             Spacer(Modifier.height(20.dp))
 
             if (isShow) {
-                Button(onClick = { onOpenShow(current.id) }) {
+                Button(onClick = { onOpenShow(current.id) }, modifier = Modifier.fillMaxWidth().height(DetailActionButtonHeight)) {
                     Text("Список серий")
                 }
             } else {
-                Row {
+                // All three actions share one row, equal width - previously "Внешний плеер"
+                // only got whatever space "Смотреть" left over and wrapped to two lines, and
+                // "Скачать" lived in a separate row with its own sizing, so the three read as
+                // mismatched instead of one family of actions.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (playbackMode != PlaybackMode.EXTERNAL) {
-                        Button(onClick = { onPlayInternally(current.id) }) {
+                        Button(
+                            onClick = { onPlayInternally(current.id) },
+                            modifier = Modifier.weight(1f).height(DetailActionButtonHeight)
+                        ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text("Смотреть")
@@ -212,35 +246,43 @@ fun DetailScreen(
                         // "во внешнем плеере" label to distinguish it from anything - that
                         // wording only earns its keep in ASK mode, next to a real second
                         // button offering the other choice.
-                        Button(onClick = { scope.launch { playExternally(context, current) } }) {
+                        Button(
+                            onClick = { scope.launch { playExternally(context, current) } },
+                            modifier = Modifier.weight(1f).height(DetailActionButtonHeight)
+                        ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text("Смотреть")
                         }
                     }
                     if (playbackMode == PlaybackMode.ASK) {
-                        Spacer(Modifier.width(12.dp))
-                        // Tinted icon+text only, no custom border - the default neutral
-                        // outline keeps this proportionate next to "Смотреть"/"Скачать"
-                        // instead of visually outweighing them.
-                        OutlinedButton(
+                        // Tonal, not outlined - reads as "same family, secondary emphasis"
+                        // rather than a differently-weighted control next to a filled button.
+                        FilledTonalButton(
                             onClick = { scope.launch { playExternally(context, current) } },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.tertiary)
+                            modifier = Modifier.weight(1f).height(DetailActionButtonHeight),
+                            colors = ButtonDefaults.filledTonalButtonColors(contentColor = MaterialTheme.colorScheme.tertiary)
                         ) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Внешний плеер")
+                            Text("Внешний", maxLines = 1)
                         }
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
+                // Its own row rather than a third equal-width slot above - the downloading/
+                // completed states carry real text (progress %, a cancel/delete action) that a
+                // narrow third-of-the-screen column would just crowd. Matched to the same pill
+                // height/shape as the row above instead, so it still reads as the same family
+                // of controls rather than a visually unrelated one.
                 DownloadControlRow(
                     item = current,
                     liveProgress = liveProgressMap[current.id],
                     onDownload = { app.downloadManager.start(current) },
                     onCancel = { app.downloadManager.cancel(current.id) },
-                    onDelete = { scope.launch { app.downloadManager.deleteDownload(current) } }
+                    onDelete = { scope.launch { app.downloadManager.deleteDownload(current) } },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -386,6 +428,30 @@ fun DetailScreen(
             onDismiss = { actorSheetName = null }
         )
     }
+    }
+}
+
+/** One small pill for a single fact - year, rating, runtime, country, age rating, release
+ * quality, subtitle availability. Replaces one long "2021  •  ★ 7.2  •  110 мин  •  ..." line,
+ * which read as a single undifferentiated wall of text and always fully truncated on a narrow
+ * screen instead of wrapping - a FlowRow of chips wraps naturally and lets each fact stay
+ * legible on its own. */
+@Composable
+private fun MetaChip(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

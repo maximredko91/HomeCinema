@@ -7,8 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
@@ -58,7 +58,7 @@ fun ShowDetailScreen(
                 title = { Text(show?.title.orEmpty()) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
@@ -237,7 +237,7 @@ private fun EpisodeRow(
             }
             if (progressFraction > 0.02f) {
                 LinearProgressIndicator(
-                    progress = progressFraction,
+                    progress = { progressFraction },
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = Color.Black.copy(alpha = 0.4f)
@@ -297,7 +297,7 @@ private fun EpisodeRow(
                         onClick = onPlayExternally,
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.tertiary)
                     ) {
-                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("Внешний плеер")
                     }

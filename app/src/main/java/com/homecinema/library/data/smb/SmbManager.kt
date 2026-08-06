@@ -97,7 +97,11 @@ class SmbManager {
      * one SMB round-trip per subfolder just to see what's in it - doing those one at a time
      * made large libraries take minutes just to finish listing, before any actual parsing
      * even started. Bounded concurrency (walkSemaphore) hides that latency behind itself. */
-    suspend fun listAllFilesRecursive(sourceId: String, config: SmbConfig): List<SmbFile> = withContext(Dispatchers.IO) {
+    suspend fun listAllFilesRecursive(
+        sourceId: String,
+        config: SmbConfig,
+        onFileFound: (SmbFile) -> Unit = {}
+    ): List<SmbFile> = withContext(Dispatchers.IO) {
         val ctx = contextFor(sourceId, config)
         val root = SmbFile(rootUrl(config), ctx)
         // Deliberately NOT behind walk()'s try/catch: a failure listing the root itself
@@ -109,11 +113,22 @@ class SmbManager {
             ?: throw java.io.IOException("Папка «${config.share}» недоступна или не существует")
 
         val out = ConcurrentLinkedQueue<SmbFile>()
+        // onFileFound fires for every file as the walk finds it (previously nothing was
+        // reported until the entire, possibly minutes-long, recursive walk had fully
+        // finished - the "Обход папок…" progress line sat frozen the whole time, then
+        // jumped straight to the final count, which read as "stuck"). What counts as
+        // progress-worthy and how often to actually surface it is the caller's call - this
+        // is a generic SMB helper with no notion of "video file" vs. "junk" (.nfo/.srt/
+        // poster) to filter on.
+        fun add(file: SmbFile) {
+            out.add(file)
+            onFileFound(file)
+        }
         val walkSemaphore = Semaphore(WALK_CONCURRENCY)
         coroutineScope {
             rootChildren.map { child ->
                 async {
-                    if (child.isDirectory) walk(child, out, walkSemaphore) else out.add(child)
+                    if (child.isDirectory) walk(child, out, walkSemaphore, ::add) else add(child)
                 }
             }.awaitAll()
         }
@@ -122,15 +137,15 @@ class SmbManager {
 
     /** Only for subfolders below the root: one bad/unreadable folder deep in the tree
      * shouldn't abort the whole scan, so failures here are still swallowed. */
-    private suspend fun walk(dir: SmbFile, out: ConcurrentLinkedQueue<SmbFile>, semaphore: Semaphore) {
+    private suspend fun walk(dir: SmbFile, out: ConcurrentLinkedQueue<SmbFile>, semaphore: Semaphore, add: (SmbFile) -> Unit) {
         val children = try { semaphore.withPermit { dir.listFiles() } } catch (e: Exception) { return }
         coroutineScope {
             (children ?: emptyArray()).map { child ->
                 async {
                     if (child.isDirectory) {
-                        walk(child, out, semaphore)
+                        walk(child, out, semaphore, add)
                     } else {
-                        out.add(child)
+                        add(child)
                     }
                 }
             }.awaitAll()
