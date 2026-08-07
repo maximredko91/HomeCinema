@@ -40,6 +40,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.data.media.PlaybackNotificationService
 import com.homecinema.library.data.media.findLocalSiblingSubtitle
 import com.homecinema.library.data.media.subtitleMimeType
 import com.homecinema.library.data.smb.SmbDataSource
@@ -173,7 +174,7 @@ fun PlayerScreen(itemId: String) {
             .build()
         val mediaSource = DefaultMediaSourceFactory(dataSourceFactory).createMediaSource(mediaItem)
 
-        player = ExoPlayer.Builder(context).build().apply {
+        val newPlayer = ExoPlayer.Builder(context).build().apply {
             setMediaSource(mediaSource)
             prepare()
             if (shouldResume(loaded.playbackPositionMs, loaded.durationMs)) {
@@ -181,6 +182,11 @@ fun PlayerScreen(itemId: String) {
             }
             playWhenReady = true
         }
+        player = newPlayer
+        // Keeps a system notification (title, poster, tap to come back) alive while this plays
+        // in the background - previously there was none for internal playback at all, so
+        // leaving the app mid-movie meant no way back into it short of reopening from scratch.
+        PlaybackNotificationService.attach(context, newPlayer, loaded.title, loaded.posterLocalPath, itemId)
     }
 
     // Saves the current position before releasing, so playback can resume next time.
@@ -195,6 +201,7 @@ fun PlayerScreen(itemId: String) {
                 }
                 p.release()
             }
+            PlaybackNotificationService.detach(context)
         }
     }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -50,6 +51,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -96,6 +98,7 @@ import com.homecinema.library.ui.theme.glassEffect
 import com.homecinema.library.ui.theme.glassSheetContainerColor
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import java.io.File
@@ -223,6 +226,9 @@ fun LibraryScreen(
     var filtersSheetOpen by remember { mutableStateOf(false) }
     var mediaTypeMenuOpen by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
+    // Whole header (top bar + banners) slides away on scroll-down, back on scroll-up - shared
+    // between both layout branches below since only one is ever actually composed at a time.
+    val topBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     // Hoisted here (rather than inside CollectionsGrid/ListsGrid) because LibraryScreen itself
     // stays mounted while browsing into and out of a collection/list - a state remembered
@@ -280,6 +286,24 @@ fun LibraryScreen(
     BackHandler(enabled = selectedCollection != null) { viewModel.clearCollectionSelection() }
     BackHandler(enabled = selectedListId != null) { viewModel.clearListSelection() }
     BackHandler(enabled = searchActive) { closeSearch() }
+
+    // At the root of any of the three tabs (nothing drilled into, no search) - back used to
+    // exit the app immediately, which is technically correct (there's nowhere else in the app
+    // to go back to) but easy to trigger by accident with an edge-swipe. One more tap/swipe
+    // within 2s actually exits; the first one just warns instead.
+    var backPressedOnce by remember { mutableStateOf(false) }
+    BackHandler(enabled = selectedCollection == null && selectedListId == null && !searchActive) {
+        if (backPressedOnce) {
+            (context as? android.app.Activity)?.finish()
+        } else {
+            backPressedOnce = true
+            Toast.makeText(context, "Нажмите «назад» ещё раз, чтобы выйти", Toast.LENGTH_SHORT).show()
+            playScope.launch {
+                delay(2000)
+                backPressedOnce = false
+            }
+        }
+    }
 
     val showSearchAndFilters = libraryTab == LibraryTab.ALL || selectedCollection != null || selectedListId != null
     // Same branch this drives in the `when` below - the update/continue-watching banners
@@ -408,9 +432,15 @@ fun LibraryScreen(
 
     if (libraryLayout == LibraryLayout.CLASSIC) {
     Scaffold(
+        modifier = Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),
         topBar = {
-            Column(Modifier.floatingChrome()) {
+            Column(
+                Modifier
+                    .offset { IntOffset(0, topBarScrollBehavior.state.heightOffset.roundToInt()) }
+                    .floatingChrome()
+            ) {
             TopAppBar(
+                scrollBehavior = topBarScrollBehavior,
                 title = {
                     if (searchActive) {
                         TextField(
@@ -576,9 +606,15 @@ fun LibraryScreen(
     // destination, history lives in Settings, scan is pull-to-refresh on the grid itself, same
     // gesture in both layouts).
     Scaffold(
+        modifier = Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),
         topBar = {
-            Column(Modifier.floatingChrome()) {
+            Column(
+                Modifier
+                    .offset { IntOffset(0, topBarScrollBehavior.state.heightOffset.roundToInt()) }
+                    .floatingChrome()
+            ) {
             TopAppBar(
+                scrollBehavior = topBarScrollBehavior,
                 title = {
                     if (searchActive) {
                         TextField(

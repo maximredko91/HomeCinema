@@ -1,6 +1,7 @@
 package com.homecinema.library
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -11,9 +12,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
@@ -32,6 +35,12 @@ class MainActivity : ComponentActivity() {
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    // Tapping the playback notification re-opens this same Activity instance (FLAG_ACTIVITY_
+    // CLEAR_TOP) rather than creating a new one, which means onCreate() won't run again - the
+    // extra has to be picked up in onNewIntent() too, and both paths feed the same mutable
+    // state so AppNavHost can react to either.
+    private val pendingPlayerItemId = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -44,14 +53,26 @@ class MainActivity : ComponentActivity() {
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        pendingPlayerItemId.value = intent?.getStringExtra(EXTRA_OPEN_PLAYER_ITEM_ID)
+
         setContent {
-            HomeCinemaRoot()
+            HomeCinemaRoot(pendingPlayerItemId)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingPlayerItemId.value = intent.getStringExtra(EXTRA_OPEN_PLAYER_ITEM_ID)
+    }
+
+    companion object {
+        const val EXTRA_OPEN_PLAYER_ITEM_ID = "open_player_item_id"
     }
 }
 
 @Composable
-private fun HomeCinemaRoot() {
+private fun HomeCinemaRoot(pendingPlayerItemId: MutableState<String?>) {
     val app = HomeCinemaApp.instance
     val themeMode by app.settingsStore.themeModeFlow.collectAsState(initial = ThemeMode.SYSTEM)
     val accentName by app.settingsStore.accentColorNameFlow.collectAsState(initial = "GOLD")
@@ -86,7 +107,7 @@ private fun HomeCinemaRoot() {
         glassOpacityPercent = glassOpacity
     ) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            AppNavHost()
+            AppNavHost(pendingPlayerItemId)
         }
     }
 }

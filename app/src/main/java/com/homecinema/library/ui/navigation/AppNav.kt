@@ -1,6 +1,9 @@
 package com.homecinema.library.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -39,8 +42,19 @@ private object Routes {
 }
 
 @Composable
-fun AppNavHost() {
+fun AppNavHost(pendingPlayerItemId: MutableState<String?> = mutableStateOf(null)) {
     val navController = rememberNavController()
+
+    // Tapping the playback notification lands here - starts at the library as always (so back
+    // still makes sense), then immediately navigates on top once there's a pending item id.
+    // Keyed on the value itself (not Unit) so tapping the notification again for a different/
+    // same title while the app is already open re-triggers navigation too.
+    LaunchedEffect(pendingPlayerItemId.value) {
+        pendingPlayerItemId.value?.let { id ->
+            navController.navigate("player/$id")
+            pendingPlayerItemId.value = null
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.LIBRARY) {
         composable(Routes.LIBRARY) {

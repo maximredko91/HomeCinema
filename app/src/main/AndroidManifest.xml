@@ -67,6 +67,11 @@
             android:name=".data.streaming.StreamingService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <service
+            android:name=".data.media.PlaybackNotificationService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>
