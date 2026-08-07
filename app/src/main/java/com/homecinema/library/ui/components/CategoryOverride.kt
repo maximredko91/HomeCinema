@@ -17,11 +17,13 @@ import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +61,7 @@ fun autoDetectedMediaType(genres: String, isShow: Boolean): MediaType {
  * genre-keyword heuristic got it wrong or the source .nfo just didn't have a genre filled
  * in at all. A small pencil badge shows when the current value is a manual override rather
  * than the automatic guess. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryChip(mediaType: MediaType, overridden: Boolean, onClick: () -> Unit) {
     val icon = when {
@@ -66,21 +69,27 @@ fun CategoryChip(mediaType: MediaType, overridden: Boolean, onClick: () -> Unit)
         mediaType == MediaType.TV_SHOW -> Icons.Default.Tv
         else -> Icons.Default.Theaters
     }
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
+    // Disables Material3's default 48dp minimum touch target on this clickable Surface - this
+    // chip sits inline with plain (non-clickable) MetaChips in DetailScreen's metadata row,
+    // which don't get that enforced minimum, so leaving it on made this one visibly taller than
+    // its siblings in the same row.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(categoryLabel(mediaType), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (overridden) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.category_manual_override_cd), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(11.dp))
+                Text(categoryLabel(mediaType), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (overridden) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.category_manual_override_cd), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(11.dp))
+                }
             }
         }
     }
