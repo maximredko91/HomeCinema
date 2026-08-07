@@ -6,4 +6,4 @@
     android:layout_height="match_parent"
     android:background="@android:color/black"
     app:surface_type="texture_view"
-    app:use_controller="true" />
+    app:use_controller="false" />

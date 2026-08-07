@@ -299,6 +299,21 @@
     <string name="player_aspect_fit">По размеру экрана</string>
     <string name="player_aspect_zoom">Обрезать</string>
     <string name="player_aspect_fill">Растянуть</string>
+    <string name="player_lock_cd">Заблокировать экран</string>
+    <string name="player_unlock_cd">Разблокировать экран</string>
+    <string name="player_seek_10_sec">10 сек</string>
+    <string name="player_fast_forward_2x">Ускорение 2×</string>
+    <string name="player_back_cd">Назад</string>
+    <string name="player_play_cd">Воспроизвести</string>
+    <string name="player_pause_cd">Пауза</string>
+    <string name="player_replay_10_cd">Назад на 10 секунд</string>
+    <string name="player_forward_10_cd">Вперёд на 10 секунд</string>
+    <string name="player_settings_cd">Настройки воспроизведения</string>
+    <string name="player_settings_speed">Скорость</string>
+    <string name="player_settings_subtitles">Субтитры</string>
+    <string name="player_settings_subtitles_on">Включены</string>
+    <string name="player_settings_subtitles_off">Выключены</string>
+    <string name="player_settings_audio_track">Звуковая дорожка</string>
 
     <!-- Zoomable image dialog -->
     <string name="image_zoom_close_cd">Закрыть</string>

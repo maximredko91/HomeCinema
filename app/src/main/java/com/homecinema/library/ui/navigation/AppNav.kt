@@ -140,7 +140,7 @@ fun AppNavHost(pendingPlayerItemId: MutableState<String?> = mutableStateOf(null)
             arguments = listOf(navArgument("id") { type = NavType.StringType })
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id").orEmpty()
-            PlayerScreen(itemId = id)
+            PlayerScreen(itemId = id, onBack = { navController.popBackStack() })
         }
     }
 }

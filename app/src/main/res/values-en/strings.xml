@@ -294,6 +294,21 @@
     <string name="player_aspect_fit">Fit screen</string>
     <string name="player_aspect_zoom">Crop</string>
     <string name="player_aspect_fill">Stretch</string>
+    <string name="player_lock_cd">Lock screen</string>
+    <string name="player_unlock_cd">Unlock screen</string>
+    <string name="player_seek_10_sec">10 sec</string>
+    <string name="player_fast_forward_2x">2× fast-forward</string>
+    <string name="player_back_cd">Back</string>
+    <string name="player_play_cd">Play</string>
+    <string name="player_pause_cd">Pause</string>
+    <string name="player_replay_10_cd">Replay 10 seconds</string>
+    <string name="player_forward_10_cd">Forward 10 seconds</string>
+    <string name="player_settings_cd">Playback settings</string>
+    <string name="player_settings_speed">Speed</string>
+    <string name="player_settings_subtitles">Subtitles</string>
+    <string name="player_settings_subtitles_on">On</string>
+    <string name="player_settings_subtitles_off">Off</string>
+    <string name="player_settings_audio_track">Audio track</string>
 
     <!-- Zoomable image dialog -->
     <string name="image_zoom_close_cd">Close</string>
