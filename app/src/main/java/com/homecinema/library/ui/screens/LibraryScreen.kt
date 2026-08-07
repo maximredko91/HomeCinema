@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FilterList
@@ -200,6 +201,7 @@ fun LibraryScreen(
     val rescanSuggested by viewModel.rescanSuggested.collectAsState()
     val categoryCounts by viewModel.categoryCounts.collectAsState()
     val customLists by viewModel.customLists.collectAsState()
+    val watchHistory by viewModel.watchHistory.collectAsState()
     val listCounts by viewModel.listCounts.collectAsState()
     val favoritesCount by viewModel.favoritesCount.collectAsState()
     val selectedListId by viewModel.selectedListId.collectAsState()
@@ -380,6 +382,12 @@ fun LibraryScreen(
                             onCreateList = viewModel::createList,
                             onRenameList = viewModel::renameList,
                             onDeleteList = viewModel::deleteList,
+                            topContentPadding = padding.calculateTopPadding(),
+                            bottomContentPadding = padding.calculateBottomPadding()
+                        )
+                        LibraryTab.HISTORY -> HistoryContent(
+                            history = watchHistory,
+                            onOpenDetail = onOpenDetail,
                             topContentPadding = padding.calculateTopPadding(),
                             bottomContentPadding = padding.calculateBottomPadding()
                         )
@@ -596,7 +604,7 @@ fun LibraryScreen(
         bottomBar = {
             if (continueWatching.isNotEmpty()) {
                 val topItem = continueWatching.first()
-                ContinueWatchingBar(item = topItem, onClick = { handleContinueWatchingClick(topItem) })
+                ContinueWatchingBar(item = topItem, onClick = { handleContinueWatchingClick(topItem) }, onDismiss = { viewModel.dismissContinueWatching(topItem.id) })
             }
         }
     ) { padding -> bodyContent(padding) }
@@ -739,7 +747,7 @@ fun LibraryScreen(
             Column {
             if (continueWatching.isNotEmpty()) {
                 val topItem = continueWatching.first()
-                ContinueWatchingBar(item = topItem, onClick = { handleContinueWatchingClick(topItem) })
+                ContinueWatchingBar(item = topItem, onClick = { handleContinueWatchingClick(topItem) }, onDismiss = { viewModel.dismissContinueWatching(topItem.id) })
             }
             // Same treatment as the top bar (homeCinemaTopAppBarColors): transparent container
             // in Glass theme so glassEffect's real blur shows through instead of a flat color
@@ -787,8 +795,8 @@ fun LibraryScreen(
                     label = { Text("Списки") }
                 )
                 NavigationBarItem(
-                    selected = false,
-                    onClick = { closeSearch(); onOpenHistory() },
+                    selected = libraryTab == LibraryTab.HISTORY,
+                    onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.HISTORY) },
                     icon = { Icon(Icons.Default.History, contentDescription = null) },
                     label = { Text("История") }
                 )
@@ -990,7 +998,7 @@ private fun LibraryGrid(
  * Shows only the single most recently-played in-progress title - continueWatching is already
  * ordered most-recent-first, so that's just its head. */
 @Composable
-private fun ContinueWatchingBar(item: MediaItemEntity, onClick: () -> Unit) {
+private fun ContinueWatchingBar(item: MediaItemEntity, onClick: () -> Unit, onDismiss: () -> Unit) {
     val progressFraction = if (item.durationMs > 0) {
         (item.playbackPositionMs.toFloat() / item.durationMs).coerceIn(0f, 1f)
     } else 0f
@@ -1035,6 +1043,13 @@ private fun ContinueWatchingBar(item: MediaItemEntity, onClick: () -> Unit) {
                     contentDescription = "Продолжить просмотр",
                     tint = MaterialTheme.colorScheme.primary
                 )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Убрать из «Продолжить просмотр»",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
             LinearProgressIndicator(
                 progress = { progressFraction },

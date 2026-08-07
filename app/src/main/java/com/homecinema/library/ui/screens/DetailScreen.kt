@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -59,7 +60,7 @@ import com.homecinema.library.ui.components.ZoomableImageDialog
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassEffect
-import com.homecinema.library.ui.theme.floatingChrome
+import com.homecinema.library.ui.theme.collapsingChrome
 import com.homecinema.library.ui.theme.glassSheetContainerColor
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.flow.first
@@ -91,8 +92,10 @@ fun DetailScreen(
     var directorSheetName by remember { mutableStateOf<String?>(null) }
     var actorSheetName by remember { mutableStateOf<String?>(null) }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     ProvideGlassHazeState {
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text(item?.title.orEmpty()) },
@@ -115,7 +118,8 @@ fun DetailScreen(
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.floatingChrome()
+                scrollBehavior = scrollBehavior,
+                modifier = Modifier.collapsingChrome(scrollBehavior)
             )
         }
     ) { padding ->

@@ -38,6 +38,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -64,6 +65,7 @@ import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.glassContainerColor
 import com.homecinema.library.ui.theme.glassEffect
+import com.homecinema.library.ui.theme.collapsingChrome
 import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
@@ -661,8 +663,10 @@ private fun SettingsSubScreenScaffold(
     onBack: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     ProvideGlassHazeState {
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text(title) },
@@ -672,7 +676,8 @@ private fun SettingsSubScreenScaffold(
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.floatingChrome()
+                scrollBehavior = scrollBehavior,
+                modifier = Modifier.collapsingChrome(scrollBehavior)
             )
         }
     ) { padding ->

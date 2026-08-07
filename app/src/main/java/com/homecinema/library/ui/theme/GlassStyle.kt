@@ -2,11 +2,13 @@ package com.homecinema.library.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -17,7 +19,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -98,6 +102,19 @@ fun Modifier.glassEffect(shape: Shape = RectangleShape): Modifier {
  * pointless empty strip between the bar and the actual top/bottom of the screen. Meant to
  * replace a bare [glassEffect] wherever a screen's top bar would otherwise render full-bleed to
  * the edges - apply it in place of that call. */
+/** [floatingChrome] plus the vertical slide that makes a top bar collapse away on scroll-down
+ * and return on scroll-up (Material3's own [TopAppBarScrollBehavior], applied here rather than
+ * left to TopAppBar's own automatic positioning) - use together with a
+ * `Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)` on the enclosing Scaffold and
+ * `scrollBehavior = scrollBehavior` on the TopAppBar itself so it knows how tall it actually is
+ * (needed for the slide's travel distance to be right, not just this modifier's own offset). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun Modifier.collapsingChrome(scrollBehavior: TopAppBarScrollBehavior, shape: Shape = MaterialTheme.shapes.large): Modifier =
+    this
+        .offset { IntOffset(0, scrollBehavior.state.heightOffset.roundToInt()) }
+        .floatingChrome(shape)
+
 @Composable
 fun Modifier.floatingChrome(shape: Shape = MaterialTheme.shapes.large): Modifier =
     this

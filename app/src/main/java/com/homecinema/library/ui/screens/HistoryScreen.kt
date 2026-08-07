@@ -20,10 +20,10 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
-import com.homecinema.library.ui.theme.glassEffect
-import com.homecinema.library.ui.theme.floatingChrome
+import com.homecinema.library.ui.theme.collapsingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -33,6 +33,11 @@ import java.util.Locale
  * Everything ever played, most recent first - unlike the library's "Продолжить просмотр" row
  * this includes finished titles too, since it's meant for recalling what was watched rather
  * than only resuming what's in progress. See LibraryDao.observeWatchHistory.
+ *
+ * Standalone Scaffold+TopAppBar wrapper around [HistoryContent] - only used by the classic
+ * (top-bar) library layout, which reaches this as its own pushed screen/route. The bottom-nav
+ * layout instead embeds [HistoryContent] directly as one of its own swipeable tabs, the same
+ * way Коллекции/Списки work, rather than navigating to a separate screen for it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,8 +45,10 @@ fun HistoryScreen(onBack: () -> Unit, onOpenDetail: (String) -> Unit) {
     val app = HomeCinemaApp.instance
     val history by app.repository.observeWatchHistory().collectAsState(initial = emptyList())
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     ProvideGlassHazeState {
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text("История просмотров") },
@@ -51,39 +58,57 @@ fun HistoryScreen(onBack: () -> Unit, onOpenDetail: (String) -> Unit) {
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.floatingChrome()
+                scrollBehavior = scrollBehavior,
+                modifier = Modifier.collapsingChrome(scrollBehavior)
             )
         }
     ) { padding ->
-        if (history.isEmpty()) {
-            Box(
-                Modifier.fillMaxSize().glassBackdrop().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "Здесь появится то, что вы уже смотрели.",
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-            }
-            return@Scaffold
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().glassBackdrop(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                bottom = padding.calculateBottomPadding() + 16.dp,
-                top = padding.calculateTopPadding() + 16.dp
-            )
-        ) {
-            items(history, key = { it.id }) { item ->
-                HistoryRow(item = item, onClick = { onOpenDetail(item.id) })
-                HorizontalDivider()
-            }
-        }
+        HistoryContent(
+            history = history,
+            onOpenDetail = onOpenDetail,
+            topContentPadding = padding.calculateTopPadding(),
+            bottomContentPadding = padding.calculateBottomPadding()
+        )
     }
+    }
+}
+
+/** The actual list/empty-state, factored out so it can be embedded either inside
+ * [HistoryScreen]'s own Scaffold or directly as a page in LibraryScreen's tab pager. */
+@Composable
+fun HistoryContent(
+    history: List<MediaItemEntity>,
+    onOpenDetail: (String) -> Unit,
+    topContentPadding: androidx.compose.ui.unit.Dp,
+    bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp
+) {
+    if (history.isEmpty()) {
+        Box(
+            Modifier.fillMaxSize().glassBackdrop().padding(top = topContentPadding),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "Здесь появится то, что вы уже смотрели.",
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().glassBackdrop(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            bottom = bottomContentPadding + 16.dp,
+            top = topContentPadding + 16.dp
+        )
+    ) {
+        items(history, key = { it.id }) { item ->
+            HistoryRow(item = item, onClick = { onOpenDetail(item.id) })
+            HorizontalDivider()
+        }
     }
 }
 

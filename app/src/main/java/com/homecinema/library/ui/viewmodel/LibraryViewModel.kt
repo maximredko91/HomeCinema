@@ -42,7 +42,7 @@ enum class SortOrder(val label: String) {
     RATING("По рейтингу")
 }
 
-enum class LibraryTab { ALL, COLLECTIONS, LISTS }
+enum class LibraryTab { ALL, COLLECTIONS, LISTS, HISTORY }
 
 data class CollectionSummary(
     val name: String,
@@ -178,6 +178,12 @@ class LibraryViewModel : ViewModel() {
 
     /** In-progress movies/cartoons/episodes, most recently played first. */
     val continueWatching: StateFlow<List<MediaItemEntity>> = app.repository.observeContinueWatching()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // For the История tab embedded in the bottom-nav layout's pager - the classic layout's
+    // separate HistoryScreen route collects this itself instead, since it isn't part of this
+    // ViewModel's pager-tab state.
+    val watchHistory: StateFlow<List<MediaItemEntity>> = app.repository.observeWatchHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val availableUpdate: StateFlow<ReleaseInfo?> = app.availableUpdate

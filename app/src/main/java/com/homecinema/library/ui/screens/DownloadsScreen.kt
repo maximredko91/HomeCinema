@@ -14,12 +14,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
-import com.homecinema.library.ui.theme.floatingChrome
+import com.homecinema.library.ui.theme.collapsingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
 import kotlinx.coroutines.launch
 
@@ -54,8 +55,10 @@ fun DownloadsScreen(
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     ProvideGlassHazeState {
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text(if (selectionMode) "Выбрано: ${selectedIds.size}" else "Загрузки") },
@@ -88,7 +91,8 @@ fun DownloadsScreen(
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
-                modifier = Modifier.floatingChrome()
+                scrollBehavior = scrollBehavior,
+                modifier = Modifier.collapsingChrome(scrollBehavior)
             )
         }
     ) { padding ->
