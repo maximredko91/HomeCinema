@@ -11,6 +11,7 @@ import com.homecinema.library.R
  * always ships its own changelog in whichever language the user has picked.
  */
 val LOCAL_CHANGELOG: List<ReleaseNote> = listOf(
+    ReleaseNote(version = "1.22", name = "v1.22", publishedAt = "2026-08-08", bodyRes = R.string.changelog_1_22),
     ReleaseNote(version = "1.21", name = "v1.21", publishedAt = "2026-08-07", bodyRes = R.string.changelog_1_21),
     ReleaseNote(version = "1.20", name = "v1.20", publishedAt = "2026-08-07", bodyRes = R.string.changelog_1_20),
     ReleaseNote(version = "1.19", name = "v1.19", publishedAt = "2026-08-07", bodyRes = R.string.changelog_1_19),
