@@ -49,11 +49,17 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.composed
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -109,6 +115,34 @@ private const val REFERENCE_GRID_WIDTH_DP = 360f
  * 2:3 aspect ratio). The second pass keeps adding columns - shrinking every card a bit more -
  * until at least ~1.4 rows actually fit vertically. Shared by the Библиотека/Коллекции/Списки
  * grids - each has its own LazyVerticalGrid, and all three had this same problem. */
+/** Claims the left/right screen-edge strips so Android's own edge-swipe-for-back/home gesture
+ * doesn't compete with this pager's own left/right swipe (switching Библиотека/Коллекции/
+ * Списки) - without this, a swipe started too close to either edge got stolen by the system
+ * gesture and the whole app closed/backgrounded instead of just changing tabs. Clears the
+ * exclusion on dispose so it doesn't linger and affect other screens (Detail/Player) where the
+ * normal system back gesture should work as usual. */
+private fun Modifier.excludeFromSystemBackGesture(): Modifier = composed {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    DisposableEffect(view) {
+        onDispose { view.systemGestureExclusionRects = emptyList() }
+    }
+    onGloballyPositioned { coordinates ->
+        val bounds = coordinates.boundsInWindow()
+        val edgeWidthPx = with(density) { 32.dp.toPx() }
+        view.systemGestureExclusionRects = listOf(
+            android.graphics.Rect(
+                bounds.left.toInt(), bounds.top.toInt(),
+                (bounds.left + edgeWidthPx).toInt(), bounds.bottom.toInt()
+            ),
+            android.graphics.Rect(
+                (bounds.right - edgeWidthPx).toInt(), bounds.top.toInt(),
+                bounds.right.toInt(), bounds.bottom.toInt()
+            )
+        )
+    }
+}
+
 @Composable
 private fun rememberEffectiveColumns(
     gridColumns: Int,
@@ -187,6 +221,7 @@ fun LibraryScreen(
 
     var searchActive by remember { mutableStateOf(false) }
     var filtersSheetOpen by remember { mutableStateOf(false) }
+    var mediaTypeMenuOpen by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
 
     // Hoisted here (rather than inside CollectionsGrid/ListsGrid) because LibraryScreen itself
@@ -268,7 +303,10 @@ fun LibraryScreen(
                 // Swiping between tabs only makes sense at each tab's top level - once drilled
                 // into a specific collection or list, that replaces the pager with a single
                 // filtered view instead (same as before swipe support existed).
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize().excludeFromSystemBackGesture()
+                ) { page ->
                     when (LibraryTab.entries[page]) {
                         LibraryTab.ALL -> LibraryGrid(
                             configured = configured,
@@ -481,8 +519,17 @@ fun LibraryScreen(
                 PrimaryTabRow(selectedTabIndex = libraryTab.ordinal) {
                     Tab(
                         selected = libraryTab == LibraryTab.ALL,
-                        onClick = { viewModel.setLibraryTab(LibraryTab.ALL) },
+                        onClick = {
+                            if (libraryTab == LibraryTab.ALL) mediaTypeMenuOpen = true
+                            else viewModel.setLibraryTab(LibraryTab.ALL)
+                        },
                         text = { Text("Библиотека") }
+                    )
+                    MediaTypeFilterMenu(
+                        expanded = mediaTypeMenuOpen,
+                        onDismissRequest = { mediaTypeMenuOpen = false },
+                        categoryCounts = categoryCounts,
+                        onSelect = viewModel::setFilter
                     )
                     Tab(
                         selected = libraryTab == LibraryTab.COLLECTIONS,
@@ -669,9 +716,22 @@ fun LibraryScreen(
             ) {
                 NavigationBarItem(
                     selected = libraryTab == LibraryTab.ALL,
-                    onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.ALL) },
+                    onClick = {
+                        closeSearch()
+                        // Tapping the already-active tab again offers to narrow down by media
+                        // type instead of doing nothing - useful once "Библиотека" mixes
+                        // movies, cartoons, shows and cartoon series together.
+                        if (libraryTab == LibraryTab.ALL) mediaTypeMenuOpen = true
+                        else viewModel.setLibraryTab(LibraryTab.ALL)
+                    },
                     icon = { Icon(Icons.Default.Movie, contentDescription = null) },
                     label = { Text("Библиотека") }
+                )
+                MediaTypeFilterMenu(
+                    expanded = mediaTypeMenuOpen,
+                    onDismissRequest = { mediaTypeMenuOpen = false },
+                    categoryCounts = categoryCounts,
+                    onSelect = viewModel::setFilter
                 )
                 NavigationBarItem(
                     selected = libraryTab == LibraryTab.COLLECTIONS,
@@ -766,6 +826,28 @@ private fun LibraryGrid(
             if (gridState.isScrollInProgress) return@derivedStateOf null
             val visibleIndex = gridState.firstVisibleItemIndex
             sortedLetterEntries.lastOrNull { it.value <= visibleIndex }?.key
+        }
+    }
+
+    // Separate from currentScrollLetter on purpose - that one deliberately skips reading
+    // firstVisibleItemIndex mid-scroll to avoid recomposing the (expensive, width-affecting)
+    // alphabet bar UI every frame, which is exactly what caused the earlier card-jitter bug in
+    // this screen. This one DOES need to see every frame (it's what a scroll-through-the-
+    // alphabet tick is for), but it only ever feeds a LaunchedEffect key comparison - a cheap
+    // string equality check, not a recomposition of any visible UI - so it doesn't reintroduce
+    // that problem.
+    if (showAlphabetBar) {
+        val haptic = LocalHapticFeedback.current
+        val hapticLetter by remember(sortedLetterEntries) {
+            derivedStateOf {
+                val visibleIndex = gridState.firstVisibleItemIndex
+                sortedLetterEntries.lastOrNull { it.value <= visibleIndex }?.key
+            }
+        }
+        LaunchedEffect(hapticLetter) {
+            if (hapticLetter != null && gridState.isScrollInProgress) {
+                haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+            }
         }
     }
 
@@ -1617,6 +1699,32 @@ private fun EmptyState(
         if (actionLabel != null) {
             Spacer(Modifier.height(20.dp))
             Button(onClick = onAction) { Text(actionLabel) }
+        }
+    }
+}
+
+/** Offered when the user taps the already-active Библиотека tab/nav item again - narrows down
+ * by media type instead of doing nothing. "Всё" always shows; the specific categories only show
+ * up if the library actually has at least one title in them (categoryCounts), so someone with
+ * no cartoons on disk doesn't see a "Мультфильмы" option that would just be empty. */
+@Composable
+private fun MediaTypeFilterMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    categoryCounts: Map<LibraryFilter, Int>,
+    onSelect: (LibraryFilter) -> Unit
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest) {
+        FILTER_OPTIONS.forEach { option ->
+            if (option.filter == LibraryFilter.ALL || (categoryCounts[option.filter] ?: 0) > 0) {
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = {
+                        onSelect(option.filter)
+                        onDismissRequest()
+                    }
+                )
+            }
         }
     }
 }

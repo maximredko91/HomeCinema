@@ -84,6 +84,17 @@ class StreamingService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // Fires when the user swipes HomeCinema away from Recents (the app's task is removed, not
+    // just backgrounded). User's explicit choice: stop the stream/notification right away
+    // instead of waiting out the 6h safety net - accepting that if an external player is still
+    // genuinely reading from this proxy at that exact moment, closing the app this way will cut
+    // it off. Each Android user profile runs its own separate process for this app, so this
+    // only ever affects the profile whose task was actually swiped away.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         idleWatchdog?.cancel()
         scope.cancel()

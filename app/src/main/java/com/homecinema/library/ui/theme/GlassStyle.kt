@@ -90,15 +90,18 @@ fun Modifier.glassEffect(shape: Shape = RectangleShape): Modifier {
     }
 }
 
-/** Same floating, edge-inset treatment used for the bottom navigation bar - a few dp of margin
- * so chrome never sits flush against the true screen edge (where phones with strongly rounded/
- * curved corners mask off pixels, clipping anything drawn right at the corner), plus rounded
- * corners and the usual glass blur. Meant to replace a bare [glassEffect] wherever a screen's
- * top bar would otherwise render full-bleed to the edges - apply it in place of that call. */
+/** Same floating, edge-inset treatment used for the bottom navigation bar - a few dp of
+ * horizontal margin so chrome never sits flush against the true screen edge (where phones with
+ * strongly rounded/curved corners mask off pixels, clipping anything drawn right at the
+ * corner), plus rounded corners and the usual glass blur. Vertical margin deliberately left at
+ * 0 - the corner risk is specifically horizontal, and a vertical gap here just reads as a
+ * pointless empty strip between the bar and the actual top/bottom of the screen. Meant to
+ * replace a bare [glassEffect] wherever a screen's top bar would otherwise render full-bleed to
+ * the edges - apply it in place of that call. */
 @Composable
 fun Modifier.floatingChrome(shape: Shape = MaterialTheme.shapes.large): Modifier =
     this
-        .padding(horizontal = 8.dp, vertical = 4.dp)
+        .padding(horizontal = 8.dp)
         .clip(shape)
         .glassEffect(shape = shape)
 

@@ -88,7 +88,7 @@ fun AppNavHost() {
         composable(Routes.DOWNLOADS) {
             DownloadsScreen(
                 onBack = { navController.popBackStack() },
-                onPlay = { id -> navController.navigate("player/$id") }
+                onOpenDetail = { id -> navController.navigate("detail/$id") }
             )
         }
         composable(Routes.HISTORY) {
