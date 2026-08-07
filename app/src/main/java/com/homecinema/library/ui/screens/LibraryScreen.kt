@@ -590,10 +590,13 @@ fun LibraryScreen(
                         onDismiss = viewModel::dismissRescanSuggestion
                     )
                 }
-                if (selectedCollection == null && continueWatching.isNotEmpty()) {
-                    ContinueWatchingRow(items = continueWatching, onClick = ::handleContinueWatchingClick, onDismiss = viewModel::dismissContinueWatching)
-                }
             }
+            }
+        },
+        bottomBar = {
+            if (continueWatching.isNotEmpty()) {
+                val topItem = continueWatching.first()
+                ContinueWatchingBar(item = topItem, onClick = { handleContinueWatchingClick(topItem) })
             }
         }
     ) { padding -> bodyContent(padding) }
@@ -729,13 +732,15 @@ fun LibraryScreen(
                         onDismiss = viewModel::dismissRescanSuggestion
                     )
                 }
-                if (selectedCollection == null && continueWatching.isNotEmpty()) {
-                    ContinueWatchingRow(items = continueWatching, onClick = ::handleContinueWatchingClick, onDismiss = viewModel::dismissContinueWatching)
-                }
             }
             }
         },
         bottomBar = {
+            Column {
+            if (continueWatching.isNotEmpty()) {
+                val topItem = continueWatching.first()
+                ContinueWatchingBar(item = topItem, onClick = { handleContinueWatchingClick(topItem) })
+            }
             // Same treatment as the top bar (homeCinemaTopAppBarColors): transparent container
             // in Glass theme so glassEffect's real blur shows through instead of a flat color
             // sitting on top of it un-blurred; normal opaque Material3 default otherwise.
@@ -787,6 +792,7 @@ fun LibraryScreen(
                     icon = { Icon(Icons.Default.History, contentDescription = null) },
                     label = { Text("История") }
                 )
+            }
             }
         }
     ) { padding -> bodyContent(padding) }
@@ -976,103 +982,67 @@ private fun LibraryGrid(
     }
 }
 
+/** Fixed mini-player-style bar pinned above the bottom navigation (or, in the classic layout,
+ * above nothing else - it's just the bottom-most thing on screen) - replaces the old
+ * horizontally-scrollable row of every in-progress title, which used to live inside the
+ * collapsible top header and inherited its scroll-hide animation as an unwanted side effect
+ * (sliding away and back on every scroll, not just staying put like a real mini-player).
+ * Shows only the single most recently-played in-progress title - continueWatching is already
+ * ordered most-recent-first, so that's just its head. */
 @Composable
-private fun ContinueWatchingRow(
-    items: List<MediaItemEntity>,
-    onClick: (MediaItemEntity) -> Unit,
-    onDismiss: (String) -> Unit
-) {
-    Column(Modifier.padding(top = 12.dp, bottom = 8.dp)) {
-        Text(
-            "Продолжить просмотр",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-        Spacer(Modifier.height(8.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(items, key = { it.id }) { item ->
-                ContinueWatchingCard(
-                    item = item,
-                    onClick = { onClick(item) },
-                    onDismiss = { onDismiss(item.id) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ContinueWatchingCard(item: MediaItemEntity, onClick: () -> Unit, onDismiss: () -> Unit) {
+private fun ContinueWatchingBar(item: MediaItemEntity, onClick: () -> Unit) {
     val progressFraction = if (item.durationMs > 0) {
         (item.playbackPositionMs.toFloat() / item.durationMs).coerceIn(0f, 1f)
     } else 0f
     val thumb = item.fanartLocalPath ?: item.posterLocalPath
 
-    Column(Modifier.width(180.dp).clickable(onClick = onClick)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            if (thumb != null) {
-                AsyncImage(
-                    model = thumb,
-                    contentDescription = item.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
-            }
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(28.dp)
-                    .padding(2.dp)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().floatingChrome(),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center
+                        .size(width = 56.dp, height = 40.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Icon(
-                        Icons.Default.Clear,
-                        contentDescription = "Убрать из «Продолжить просмотр»",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    if (thumb != null) {
+                        AsyncImage(
+                            model = thumb,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Продолжить просмотр",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
             LinearProgressIndicator(
                 progress = { progressFraction },
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
+                modifier = Modifier.fillMaxWidth().height(2.dp),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = Color.Black.copy(alpha = 0.4f)
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            item.title,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

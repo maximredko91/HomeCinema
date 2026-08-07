@@ -1,5 +1,9 @@
 package com.homecinema.library.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -399,9 +403,25 @@ fun AppearanceSettingsScreen(onBack: () -> Unit) {
 @Composable
 fun StorageSettingsScreen(onBack: () -> Unit) {
     val app = HomeCinemaApp.instance
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var clearingCache by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
+    val downloadFolderUriString by app.settingsStore.downloadFolderUriFlow.collectAsState(initial = "")
+
+    // Storage Access Framework - lets the user point downloads at literally any folder
+    // (including an SD card), not just the default Download/HomeCinema. The returned tree URI
+    // only grants access for as long as a *persistable* permission is explicitly taken here -
+    // without that call it would silently stop working again after the next app restart.
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            scope.launch { app.settingsStore.saveDownloadFolderUri(uri.toString()) }
+        }
+    }
 
     SettingsSubScreenScaffold(title = "Хранилище", onBack = onBack) {
         Text(
@@ -427,6 +447,44 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
                 Text(it, style = MaterialTheme.typography.bodySmall)
             }
         }
+
+        Column {
+            Text("Куда сохраняются загрузки", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                downloadFolderLabel(context, downloadFolderUriString),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { folderPicker.launch(null) }) { Text("Выбрать папку…") }
+                if (downloadFolderUriString.isNotBlank()) {
+                    TextButton(onClick = { scope.launch { app.settingsStore.saveDownloadFolderUri("") } }) {
+                        Text("По умолчанию")
+                    }
+                }
+            }
+            Text(
+                "Действует только для новых загрузок - уже скачанное остаётся там, где было.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+            )
+        }
+    }
+}
+
+/** A human-readable stand-in for the raw tree URI Android hands back from the folder picker
+ * (something like "content://com.android.externalstorage.documents/tree/1734-1F12%3A") -
+ * DocumentFile exposes the picked folder's own display name at least, which reads far better
+ * than the encoded URI ever would. */
+@Composable
+private fun downloadFolderLabel(context: android.content.Context, uriString: String): String {
+    if (uriString.isBlank()) return "Download/HomeCinema (по умолчанию)"
+    return remember(uriString) {
+        runCatching {
+            androidx.documentfile.provider.DocumentFile.fromTreeUri(context, Uri.parse(uriString))?.name
+        }.getOrNull() ?: "Выбранная папка"
     }
 }
 

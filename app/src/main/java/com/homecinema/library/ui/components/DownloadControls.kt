@@ -77,12 +77,13 @@ fun DownloadControlRow(
             PillOutline(modifier) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
+                // Full text, no truncation - the delete action lost its text label instead (an
+                // icon-only button below) to free up the room, rather than trading the two off
+                // against each other. Ellipsis on this text left it unclear what it even said.
                 Text("Скачано, доступно офлайн")
-                Spacer(Modifier.width(8.dp))
-                TextButton(onClick = onDelete, modifier = Modifier.height(32.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Удалить")
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "Удалить загрузку", modifier = Modifier.size(18.dp))
                 }
             }
         }

@@ -44,8 +44,10 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
+import com.homecinema.library.data.media.DownloadStorage
 import com.homecinema.library.data.media.extractReleaseQuality
 import com.homecinema.library.data.media.findLocalSiblingSubtitle
+import com.homecinema.library.data.media.isContentUri
 import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.smb.toSmbConfig
 import com.homecinema.library.data.streaming.StreamingService
@@ -127,7 +129,10 @@ fun DetailScreen(
         var hasSubtitles by remember(current.id) { mutableStateOf<Boolean?>(null) }
         LaunchedEffect(current.id) {
             val localPath = current.localFilePath
-            hasSubtitles = if (localPath != null && File(localPath).exists()) {
+            hasSubtitles = if (localPath != null && isContentUri(localPath)) {
+                val customTreeUri = app.settingsStore.downloadFolderUriFlow.first().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                DownloadStorage.findDownloadedSubtitle(context, current, Uri.parse(localPath), customTreeUri) != null
+            } else if (localPath != null && File(localPath).exists()) {
                 findLocalSiblingSubtitle(File(localPath)) != null
             } else {
                 val source = app.repository.getSource(current.sourceId)
@@ -601,7 +606,15 @@ suspend fun playExternally(context: Context, item: MediaItemEntity) {
     val localPath = item.localFilePath
     var subtitleUri: Uri? = null
 
-    if (localPath != null && File(localPath).exists()) {
+    if (localPath != null && isContentUri(localPath)) {
+        // Already a shareable content:// URI (MediaStore, or a user-picked folder) - no
+        // FileProvider wrapping needed, unlike the plain-file case below.
+        val videoUri = Uri.parse(localPath)
+        intent.setDataAndType(videoUri, "video/*")
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val customTreeUri = HomeCinemaApp.instance.settingsStore.downloadFolderUriFlow.first().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+        subtitleUri = DownloadStorage.findDownloadedSubtitle(context, item, videoUri, customTreeUri)?.first
+    } else if (localPath != null && File(localPath).exists()) {
         val videoFile = File(localPath)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", videoFile)
         intent.setDataAndType(uri, "video/*")

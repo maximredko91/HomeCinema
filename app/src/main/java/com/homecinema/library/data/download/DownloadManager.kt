@@ -1,6 +1,7 @@
 package com.homecinema.library.data.download
 
 import android.content.Context
+import android.net.Uri
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -13,11 +14,15 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.LibraryDao
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.media.DownloadStorage
 import com.homecinema.library.data.media.findLocalSiblingSubtitle
+import com.homecinema.library.data.media.isContentUri
+import com.homecinema.library.data.streaming.mimeTypeForExtension
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -71,22 +76,42 @@ class DownloadManager(
         // once cancellation lands.
         scope.launch(Dispatchers.IO) {
             val item = dao.getById(itemId) ?: return@launch
-            val videoFile = destFileFor(context as HomeCinemaApp, item)
-            findLocalSiblingSubtitle(videoFile)?.delete()
-            videoFile.delete()
+            // A cancelled download never finished, so item.localFilePath (only ever set on
+            // COMPLETED) is still null here - the same lookup DownloadWorker itself uses to
+            // find/create its entry is reused to find where the partial file actually is,
+            // rather than trying to reconstruct that separately.
+            val customTreeUri = currentCustomTreeUri()
+            val extension = item.videoFilePath.substringAfterLast('.', "mp4")
+            val videoUri = runCatching {
+                DownloadStorage.getOrCreateEntry(
+                    context, item, "${item.id}.$extension", mimeTypeForExtension(extension), customTreeUri
+                )
+            }.getOrNull()
+            DownloadStorage.deleteAll(context, item, videoUri, customTreeUri)
             dao.updateDownloadResult(itemId, DownloadState.NONE, 0, null)
         }
         workManager.cancelUniqueWork(downloadWorkName(itemId))
     }
 
     suspend fun deleteDownload(item: MediaItemEntity) {
-        item.localFilePath?.let { path ->
+        val path = item.localFilePath
+        if (path != null && isContentUri(path)) {
+            // Deletes the video, subtitle, and .nfo together - see DownloadStorage.deleteAll
+            // for why the video's own URI (not the current folder setting) is what determines
+            // where to actually look.
+            val videoUri = Uri.parse(path)
+            DownloadStorage.deleteAll(context, item, videoUri, currentCustomTreeUri())
+        } else if (path != null) {
+            // Pre-migration download, still sitting at its old plain filesystem path.
             val videoFile = File(path)
             findLocalSiblingSubtitle(videoFile)?.delete()
             videoFile.delete()
         }
         dao.updateDownloadResult(item.id, DownloadState.NONE, 0, null)
     }
+
+    private suspend fun currentCustomTreeUri(): Uri? =
+        HomeCinemaApp.instance.settingsStore.downloadFolderUriFlow.first().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
 }
 
 private fun List<WorkInfo>.toProgressMap(): Map<String, Int> = this

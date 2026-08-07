@@ -40,14 +40,17 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.data.media.DownloadStorage
 import com.homecinema.library.data.media.PlaybackNotificationService
 import com.homecinema.library.data.media.findLocalSiblingSubtitle
+import com.homecinema.library.data.media.isContentUri
 import com.homecinema.library.data.media.subtitleMimeType
 import com.homecinema.library.data.smb.SmbDataSource
 import com.homecinema.library.data.smb.toSmbConfig
 import com.homecinema.library.ui.theme.LocalIsGlassTheme
 import com.homecinema.library.ui.theme.glassBorderBrush
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -127,15 +130,30 @@ fun PlayerScreen(itemId: String) {
     LaunchedEffect(itemId) {
         val loaded = app.repository.getById(itemId) ?: return@LaunchedEffect
 
-        // Play the local copy if it's been downloaded - no network needed, and it
-        // works even if the phone has temporarily lost its connection to the router.
-        val localFile = loaded.localFilePath?.let { File(it) }?.takeIf { it.exists() }
+        // Play the local copy if it's been downloaded - no network needed, and it works even
+        // if the phone has temporarily lost its connection to the router. Downloads made after
+        // the move to Download/HomeCinema store a content:// URI here instead of a plain file
+        // path (see DownloadStorage) - older, pre-migration downloads still have a real path
+        // and keep working exactly as before.
+        val localPath = loaded.localFilePath
+        val localContentUri = localPath?.takeIf { isContentUri(it) }?.let { Uri.parse(it) }
+        val localFile = localPath?.takeIf { !isContentUri(it) }?.let { File(it) }?.takeIf { it.exists() }
 
         val dataSourceFactory: DataSource.Factory
         val videoUri: Uri
         val subtitleConfiguration: MediaItem.SubtitleConfiguration?
 
-        if (localFile != null) {
+        if (localContentUri != null) {
+            dataSourceFactory = DefaultDataSource.Factory(context)
+            videoUri = localContentUri
+            val subtitle = withTimeoutOrNull(3000) {
+                runCatching {
+                    val customTreeUri = app.settingsStore.downloadFolderUriFlow.first().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                    DownloadStorage.findDownloadedSubtitle(context, loaded, localContentUri, customTreeUri)
+                }.getOrNull()
+            }
+            subtitleConfiguration = subtitle?.let { (uri, extension) -> buildSubtitleConfiguration(uri, extension) }
+        } else if (localFile != null) {
             dataSourceFactory = DefaultDataSource.Factory(context)
             videoUri = Uri.fromFile(localFile)
             // Best-effort and defensive on purpose: this is a "nice to have" lookup that must

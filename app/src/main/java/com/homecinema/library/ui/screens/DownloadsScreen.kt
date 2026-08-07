@@ -6,6 +6,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Deselect
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,11 +21,13 @@ import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
 import com.homecinema.library.ui.theme.floatingChrome
 import com.homecinema.library.ui.theme.homeCinemaTopAppBarColors
+import kotlinx.coroutines.launch
 
 /** Poster grid, same look as the main library - used to be a plain list (title text + play/
  * delete icons). Tapping a card opens the same DetailScreen a library card would, which already
  * has everything a downloaded title needs (play internally/externally, delete the download,
- * subtitle availability) - no reason to duplicate a second, smaller set of actions here. */
+ * subtitle availability). Long-pressing a card instead starts multi-select, for clearing out
+ * several (or all) downloads at once without opening each one individually. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
@@ -29,16 +35,56 @@ fun DownloadsScreen(
     onOpenDetail: (String) -> Unit
 ) {
     val app = HomeCinemaApp.instance
+    val scope = rememberCoroutineScope()
     val downloaded by app.repository.observeDownloaded().collectAsState(initial = emptyList())
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val selectionMode = selectedIds.isNotEmpty()
+
+    // Selection is by id, but the underlying list can change (a download finishes/disappears)
+    // while it's active - drop anything no longer present so "N выбрано" and "delete all
+    // selected" never refer to a title that's already gone.
+    LaunchedEffect(downloaded) {
+        val stillPresent = downloaded.map { it.id }.toSet()
+        if (selectedIds.any { it !in stillPresent }) {
+            selectedIds = selectedIds.filterTo(mutableSetOf()) { it in stillPresent }
+        }
+    }
+
+    fun toggleSelection(id: String) {
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
 
     ProvideGlassHazeState {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Загрузки") },
+                title = { Text(if (selectionMode) "Выбрано: ${selectedIds.size}" else "Загрузки") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    IconButton(onClick = { if (selectionMode) selectedIds = emptySet() else onBack() }) {
+                        Icon(
+                            if (selectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = if (selectionMode) "Отменить выбор" else "Назад"
+                        )
+                    }
+                },
+                actions = {
+                    if (selectionMode) {
+                        val allSelected = selectedIds.size == downloaded.size
+                        IconButton(onClick = {
+                            selectedIds = if (allSelected) emptySet() else downloaded.map { it.id }.toSet()
+                        }) {
+                            Icon(
+                                if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
+                                contentDescription = if (allSelected) "Снять выделение" else "Выбрать всё"
+                            )
+                        }
+                        IconButton(onClick = {
+                            val toDelete = downloaded.filter { it.id in selectedIds }
+                            selectedIds = emptySet()
+                            scope.launch { toDelete.forEach { app.downloadManager.deleteDownload(it) } }
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Удалить выбранное")
+                        }
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
@@ -73,7 +119,13 @@ fun DownloadsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(downloaded, key = { it.id }) { item ->
-                MediaPosterCard(item = item, onClick = { onOpenDetail(item.id) })
+                MediaPosterCard(
+                    item = item,
+                    onClick = { if (selectionMode) toggleSelection(item.id) else onOpenDetail(item.id) },
+                    selectionMode = selectionMode,
+                    selected = item.id in selectedIds,
+                    onLongClick = { toggleSelection(item.id) }
+                )
             }
         }
     }

@@ -64,6 +64,7 @@ class SettingsStore(private val context: Context) {
         val LAST_SEEN_VERSION_CODE = intPreferencesKey("last_seen_version_code")
         val PREFERRED_EXTERNAL_PLAYER_PACKAGE = stringPreferencesKey("preferred_external_player_package")
         val LIBRARY_LAYOUT = stringPreferencesKey("library_layout")
+        val DOWNLOAD_FOLDER_URI = stringPreferencesKey("download_folder_uri")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -269,6 +270,20 @@ class SettingsStore(private val context: Context) {
     suspend fun savePreferredExternalPlayerPackage(packageName: String) {
         context.dataStore.edit { prefs ->
             prefs[Keys.PREFERRED_EXTERNAL_PLAYER_PACKAGE] = packageName
+        }
+    }
+
+    /** A user-picked folder (via Storage Access Framework - any location, including an SD
+     * card) for new downloads to go into instead of the default Download/HomeCinema. Empty
+     * means "use the default". Stores the persisted tree URI as a string - see
+     * DownloadStorage for how this gets used to actually create files there. */
+    val downloadFolderUriFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DOWNLOAD_FOLDER_URI] ?: ""
+    }
+
+    suspend fun saveDownloadFolderUri(uri: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DOWNLOAD_FOLDER_URI] = uri
         }
     }
 

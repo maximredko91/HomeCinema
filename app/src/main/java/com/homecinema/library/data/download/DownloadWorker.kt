@@ -3,6 +3,7 @@ package com.homecinema.library.data.download
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -12,14 +13,16 @@ import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.SmbSourceEntity
+import com.homecinema.library.data.media.DownloadStorage
+import com.homecinema.library.data.media.SUBTITLE_EXTENSIONS
 import com.homecinema.library.data.smb.SmbRandomAccessInputStream
 import com.homecinema.library.data.smb.toSmbConfig
+import com.homecinema.library.data.streaming.mimeTypeForExtension
 import jcifs.smb.SmbException
 import jcifs.smb.SmbFile
 import jcifs.smb.SmbRandomAccessFile
 import kotlinx.coroutines.CancellationException
-import java.io.File
-import java.io.FileOutputStream
+import kotlinx.coroutines.flow.first
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -95,14 +98,17 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
         }
 
         val totalBytes = runCatching { smbFile.length() }.getOrDefault(-1L)
-        val destFile = destFileFor(app, item)
-        val offset = resumeOffset(destFile.length(), totalBytes)
-        if (offset == 0L && destFile.exists()) destFile.delete()
+        val extension = item.videoFilePath.substringAfterLast('.', "mp4")
+        val customTreeUri = app.settingsStore.downloadFolderUriFlow.first().takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+        val destUri = DownloadStorage.getOrCreateEntry(
+            applicationContext, item, "${item.id}.$extension", mimeTypeForExtension(extension), customTreeUri
+        )
+        val offset = resumeOffset(DownloadStorage.currentLength(applicationContext, destUri), totalBytes)
 
         dao.updateDownloadProgress(item.id, DownloadState.DOWNLOADING, item.downloadProgress)
 
         openResumableInput(smbFile, offset).use { input ->
-            FileOutputStream(destFile, offset > 0).use { output ->
+            DownloadStorage.openOutputStream(applicationContext, destUri, append = offset > 0).use { output ->
                 copyWithProgress(input, output, offset, totalBytes) { percent ->
                     dao.updateDownloadProgress(item.id, DownloadState.DOWNLOADING, percent)
                     setProgress(workDataOf(KEY_ITEM_ID to item.id, KEY_PROGRESS to percent))
@@ -110,32 +116,53 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
                 }
             }
         }
+        DownloadStorage.markComplete(applicationContext, destUri)
 
-        dao.updateDownloadResult(item.id, DownloadState.COMPLETED, 100, destFile.absolutePath)
+        dao.updateDownloadResult(item.id, DownloadState.COMPLETED, 100, destUri.toString())
 
-        downloadSubtitleIfAny(app, item, source, destFile)
+        downloadCompanionFiles(app, item, source, customTreeUri)
     }
 
-    /** Best-effort: a sidecar subtitle is small and secondary to the video itself, so any
+    /** Best-effort: the subtitle and .nfo are small and secondary to the video itself, so any
      * failure here (not found, share hiccup) is swallowed rather than failing the whole
-     * download or burning through the retry budget. Named to match [destFile]'s base name
-     * (itemId, not the original filename) so findLocalSiblingSubtitle can find it later. */
-    private suspend fun downloadSubtitleIfAny(
+     * download or burning through the retry budget. Named to match the video's own filename
+     * (itemId, not the original filename) so findDownloadedSubtitle can find it later. */
+    private suspend fun downloadCompanionFiles(app: HomeCinemaApp, item: MediaItemEntity, source: SmbSourceEntity, customTreeUri: Uri?) {
+        val config = source.toSmbConfig()
+        runCatching {
+            val subtitlePath = app.smbManager.findSiblingSubtitle(source.id, config, item.videoFilePath)
+            if (subtitlePath != null) {
+                val extension = subtitlePath.substringAfterLast('.', "").lowercase()
+                if (extension in SUBTITLE_EXTENSIONS) {
+                    copySmbFileToDownloads(app, item, source, "${item.id}.$extension", "text/plain", subtitlePath, customTreeUri)
+                }
+            }
+        }
+        runCatching {
+            val nfoPath = app.smbManager.findSiblingNfo(source.id, config, item.videoFilePath)
+            if (nfoPath != null) {
+                copySmbFileToDownloads(app, item, source, "${item.id}.nfo", "application/xml", nfoPath, customTreeUri)
+            }
+        }
+    }
+
+    private suspend fun copySmbFileToDownloads(
         app: HomeCinemaApp,
         item: MediaItemEntity,
         source: SmbSourceEntity,
-        destFile: File
+        fileName: String,
+        mimeType: String,
+        smbPath: String,
+        customTreeUri: Uri?
     ) {
-        runCatching {
-            val subtitlePath = app.smbManager.findSiblingSubtitle(source.id, source.toSmbConfig(), item.videoFilePath)
-                ?: return@runCatching
-            val subtitleExtension = subtitlePath.substringAfterLast('.', "")
-            val subtitleFile = File(destFile.parentFile, "${item.id}.$subtitleExtension")
-            val smbSubtitleFile = app.smbManager.openFile(source.id, source.toSmbConfig(), subtitlePath)
-            smbSubtitleFile.inputStream.use { input ->
-                FileOutputStream(subtitleFile).use { output -> input.copyTo(output) }
+        val uri = DownloadStorage.getOrCreateEntry(applicationContext, item, fileName, mimeType, customTreeUri)
+        val smbCompanionFile = app.smbManager.openFile(source.id, source.toSmbConfig(), smbPath)
+        smbCompanionFile.inputStream.use { input ->
+            DownloadStorage.openOutputStream(applicationContext, uri, append = false).use { output ->
+                input.copyTo(output)
             }
         }
+        DownloadStorage.markComplete(applicationContext, uri)
     }
 
     private fun openResumableInput(smbFile: SmbFile, offset: Long): InputStream =
@@ -167,12 +194,6 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
             .build()
 
     private fun notificationId(itemId: String) = itemId.hashCode()
-}
-
-internal fun destFileFor(app: HomeCinemaApp, item: MediaItemEntity): File {
-    val downloadsDir = File(app.getExternalFilesDir(null), "downloads").apply { mkdirs() }
-    val extension = item.videoFilePath.substringAfterLast('.', "mp4")
-    return File(downloadsDir, "${item.id}.$extension")
 }
 
 /**

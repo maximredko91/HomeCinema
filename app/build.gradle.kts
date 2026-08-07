@@ -23,8 +23,8 @@ android {
         applicationId = "com.homecinema.library"
         minSdk = 31
         targetSdk = 34
-        versionCode = 24
-        versionName = "1.17"
+        versionCode = 25
+        versionName = "1.18"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -71,6 +71,11 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    // DocumentFile - a user-picked custom download folder (Storage Access Framework, any
+    // location including an SD card) is exposed as a tree Uri that needs this wrapper to
+    // create/list/delete files in, as opposed to the fixed MediaStore.Downloads collection
+    // used for the default Download/HomeCinema location.
+    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.lifecycle:lifecycle-process:2.8.4")

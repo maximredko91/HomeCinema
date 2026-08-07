@@ -1,10 +1,12 @@
 package com.homecinema.library.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Movie
@@ -30,14 +32,21 @@ import com.homecinema.library.data.db.MediaType
 fun MediaPosterCard(
     item: MediaItemEntity,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Selection mode (Downloads screen's "select several, delete together" - see
+    // DownloadsScreen) is opt-in via onLongClick being non-null, rather than a screen having to
+    // route around the whole component - every other caller (the main library grids) is
+    // unaffected just by not passing it.
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null
 ) {
     val isShow = item.mediaType == MediaType.TV_SHOW || item.mediaType == MediaType.CARTOON_SERIES
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
         Box(
             modifier = Modifier
@@ -81,7 +90,32 @@ fun MediaPosterCard(
                 }
             }
 
-            if (item.downloadState == DownloadState.COMPLETED) {
+            if (selectionMode) {
+                // Replaces the "downloaded" badge in the same corner rather than sitting next
+                // to it - every card in a selectable list (Downloads) is already downloaded, so
+                // that badge is redundant there anyway once selection is the thing being shown.
+                if (selected) {
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.45f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (selected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Выбрано",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            } else if (item.downloadState == DownloadState.COMPLETED) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)

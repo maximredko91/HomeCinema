@@ -179,6 +179,19 @@ class SmbManager {
         }.getOrNull()
     }
 
+    /** Full smb:// path of the .nfo file sitting in the same folder as [videoPath] (Kodi-style
+     * scrapers usually keep the .nfo separate from the video's own base name, e.g. a single
+     * "movie.nfo" for a folder containing "Movie.2010.1080p.mkv"), or null if the folder has
+     * none. Used for the optional "also download the .nfo" companion file, not for scanning. */
+    suspend fun findSiblingNfo(sourceId: String, config: SmbConfig, videoPath: String): String? {
+        val parentPath = videoPath.substringBeforeLast('/') + "/"
+        return runCatching {
+            listFolder(sourceId, config, parentPath)
+                .firstOrNull { child -> child.name.endsWith(".nfo", ignoreCase = true) }
+                ?.path
+        }.getOrNull()
+    }
+
     /** Drops cached connections so edited/removed sources reconnect with fresh credentials. */
     fun invalidateCache(sourceId: String? = null) {
         if (sourceId == null) contextCache.clear() else contextCache.remove(sourceId)
