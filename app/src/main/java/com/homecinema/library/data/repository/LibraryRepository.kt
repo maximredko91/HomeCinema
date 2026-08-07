@@ -7,6 +7,7 @@ import com.homecinema.library.data.db.ListCountRow
 import com.homecinema.library.data.db.ListDao
 import com.homecinema.library.data.db.ListItemCrossRef
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.db.SmbSourceDao
 import com.homecinema.library.data.db.SmbSourceEntity
 import com.homecinema.library.data.scanner.LibraryScanner
@@ -41,6 +42,14 @@ class LibraryRepository(
 
     suspend fun setFavorite(id: String, isFavorite: Boolean) {
         dao.setFavorite(id, isFavorite)
+    }
+
+    /** [overridden] = true for a manual user choice (survives the next rescan unchanged);
+     * false to hand classification back to the .nfo genre-keyword heuristic (a rescan will
+     * then recompute it - callers passing false should pass the freshly-recomputed
+     * [mediaType] themselves, see [com.homecinema.library.data.nfo.looksAnimated]). */
+    suspend fun setMediaType(id: String, mediaType: MediaType, overridden: Boolean) {
+        dao.setMediaType(id, mediaType, overridden)
     }
 
     // --- User-created custom lists ---

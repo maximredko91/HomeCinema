@@ -360,7 +360,13 @@ class LibraryScanner(
                     // silently reset every title's favorite flag back to false. Real data
                     // loss, not just a cosmetic gap: confirmed by a user losing everything
                     // they'd favorited across earlier versions.
-                    isFavorite = existing.isFavorite
+                    isFavorite = existing.isFavorite,
+                    // Same reasoning for a manually-corrected movie/cartoon or
+                    // show/cartoon-series classification - once the user has overridden it,
+                    // a rescan must not silently recompute it back from the .nfo genre
+                    // keywords (the whole point of the override is that heuristic was wrong).
+                    mediaType = if (existing.mediaTypeOverridden) existing.mediaType else fresh.mediaType,
+                    mediaTypeOverridden = existing.mediaTypeOverridden
                 )
             } ?: fresh
         }

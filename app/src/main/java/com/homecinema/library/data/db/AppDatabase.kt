@@ -68,9 +68,19 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+/** Adds media_items.mediaTypeOverridden - lets a user manually correct the movie/cartoon or
+ * show/cartoon-series classification when the .nfo genre-keyword heuristic got it wrong (or
+ * the genre was never filled in by the scraper), same real-migration approach as the ones
+ * above. */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE media_items ADD COLUMN mediaTypeOverridden INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [MediaItemEntity::class, SmbSourceEntity::class, CustomListEntity::class, ListItemCrossRef::class],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -82,7 +92,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "home_cinema.db")
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 // Safety net only for gaps not covered by an explicit migration above -
                 // every version bump from here on should get a real Migration instead.
                 .fallbackToDestructiveMigration(dropAllTables = true)

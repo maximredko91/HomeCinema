@@ -24,7 +24,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.MediaItemEntity
+import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.settings.PlaybackMode
+import com.homecinema.library.ui.components.CategoryChip
+import com.homecinema.library.ui.components.CategoryOverrideDialog
 import com.homecinema.library.ui.components.DownloadControlRow
 import com.homecinema.library.ui.components.ZoomableImageDialog
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
@@ -50,6 +53,7 @@ fun ShowDetailScreen(
     val playbackMode by app.settingsStore.playbackModeFlow.collectAsState(initial = PlaybackMode.ASK)
     val liveProgressMap by app.downloadManager.liveProgress.collectAsState()
     var zoomedImage by remember { mutableStateOf<String?>(null) }
+    var categoryDialogOpen by remember { mutableStateOf(false) }
 
     val bySeason = episodes.groupBy { it.season ?: 1 }.toSortedMap()
 
@@ -91,7 +95,7 @@ fun ShowDetailScreen(
             )
         ) {
             show?.let { current ->
-                item { ShowHeader(current, onImageClick = { path -> zoomedImage = path }) }
+                item { ShowHeader(current, onImageClick = { path -> zoomedImage = path }, onCategoryClick = { categoryDialogOpen = true }) }
             }
             bySeason.forEach { (season, seasonEpisodes) ->
                 item {
@@ -121,11 +125,26 @@ fun ShowDetailScreen(
     zoomedImage?.let { path ->
         ZoomableImageDialog(imagePath = path, onDismiss = { zoomedImage = null })
     }
+
+    if (categoryDialogOpen) {
+        show?.let { current ->
+            CategoryOverrideDialog(
+                isShow = true,
+                genres = current.genres,
+                current = current.mediaType,
+                currentOverridden = current.mediaTypeOverridden,
+                onDismiss = { categoryDialogOpen = false },
+                onSelect = { mediaType, overridden ->
+                    scope.launch { app.repository.setMediaType(current.id, mediaType, overridden) }
+                }
+            )
+        }
+    }
     }
 }
 
 @Composable
-private fun ShowHeader(show: MediaItemEntity, onImageClick: (String) -> Unit) {
+private fun ShowHeader(show: MediaItemEntity, onImageClick: (String) -> Unit, onCategoryClick: () -> Unit) {
     Column(Modifier.padding(bottom = 16.dp)) {
         if (show.fanartLocalPath != null) {
             AsyncImage(
@@ -162,6 +181,8 @@ private fun ShowHeader(show: MediaItemEntity, onImageClick: (String) -> Unit) {
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(show.title, style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                CategoryChip(mediaType = show.mediaType, overridden = show.mediaTypeOverridden, onClick = onCategoryClick)
                 Spacer(Modifier.height(6.dp))
                 val meta = buildList {
                     show.year?.let { add(it.toString()) }

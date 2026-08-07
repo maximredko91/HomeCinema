@@ -82,6 +82,9 @@ interface LibraryDao {
     @Query("UPDATE media_items SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun setFavorite(id: String, isFavorite: Boolean)
 
+    @Query("UPDATE media_items SET mediaType = :mediaType, mediaTypeOverridden = :overridden WHERE id = :id")
+    suspend fun setMediaType(id: String, mediaType: MediaType, overridden: Boolean)
+
     @Query("SELECT * FROM media_items WHERE isFavorite = 1 ORDER BY title ASC")
     fun observeFavorites(): Flow<List<MediaItemEntity>>
 }

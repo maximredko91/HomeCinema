@@ -59,5 +59,11 @@ data class MediaItemEntity(
     val durationMs: Long = 0,
     val lastPlayedAt: Long = 0,
 
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+
+    // True once the user has manually corrected mediaType (movie/cartoon toggle in
+    // DetailScreen, show/cartoon-series toggle in ShowDetailScreen) - a rescan then leaves
+    // mediaType untouched instead of recomputing it from the .nfo genre keywords, since the
+    // whole point of the override is that the automatic heuristic got (or would get) it wrong.
+    val mediaTypeOverridden: Boolean = false
 )

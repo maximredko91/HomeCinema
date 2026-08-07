@@ -53,6 +53,8 @@ import com.homecinema.library.data.settings.PlaybackMode
 import com.homecinema.library.data.smb.toSmbConfig
 import com.homecinema.library.data.streaming.StreamingService
 import com.homecinema.library.data.streaming.mimeTypeForExtension
+import com.homecinema.library.ui.components.CategoryChip
+import com.homecinema.library.ui.components.CategoryOverrideDialog
 import com.homecinema.library.ui.components.DetailActionButtonHeight
 import com.homecinema.library.ui.components.DownloadControlRow
 import com.homecinema.library.ui.components.MediaPosterCard
@@ -91,6 +93,7 @@ fun DetailScreen(
     var addToListSheetOpen by remember { mutableStateOf(false) }
     var directorSheetName by remember { mutableStateOf<String?>(null) }
     var actorSheetName by remember { mutableStateOf<String?>(null) }
+    var categoryDialogOpen by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     ProvideGlassHazeState {
@@ -211,6 +214,13 @@ fun DetailScreen(
                     // reads fine once you know it's a year or a runtime, but nothing on the
                     // chip itself said which was which.
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (current.mediaType == MediaType.MOVIE || current.mediaType == MediaType.CARTOON) {
+                            CategoryChip(
+                                mediaType = current.mediaType,
+                                overridden = current.mediaTypeOverridden,
+                                onClick = { categoryDialogOpen = true }
+                            )
+                        }
                         current.year?.let { MetaChip(it.toString(), icon = Icons.Default.CalendarMonth) }
                         current.rating?.let { MetaChip("%.1f".format(it), icon = Icons.Default.Star) }
                         current.runtimeMinutes?.let { MetaChip("$it мин", icon = Icons.Default.Schedule) }
@@ -384,6 +394,21 @@ fun DetailScreen(
 
     zoomedImage?.let { path ->
         ZoomableImageDialog(imagePath = path, onDismiss = { zoomedImage = null })
+    }
+
+    if (categoryDialogOpen) {
+        item?.let { current ->
+            CategoryOverrideDialog(
+                isShow = false,
+                genres = current.genres,
+                current = current.mediaType,
+                currentOverridden = current.mediaTypeOverridden,
+                onDismiss = { categoryDialogOpen = false },
+                onSelect = { mediaType, overridden ->
+                    scope.launch { app.repository.setMediaType(current.id, mediaType, overridden) }
+                }
+            )
+        }
     }
 
     if (addToListSheetOpen) {
