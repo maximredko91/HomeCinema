@@ -289,6 +289,12 @@
     <string name="poster_downloaded_cd">Downloaded</string>
     <string name="poster_watched_cd">Watched</string>
 
+    <!-- Player screen -->
+    <string name="player_aspect_ratio_cd">Aspect ratio</string>
+    <string name="player_aspect_fit">Fit screen</string>
+    <string name="player_aspect_zoom">Crop</string>
+    <string name="player_aspect_fill">Stretch</string>
+
     <!-- Zoomable image dialog -->
     <string name="image_zoom_close_cd">Close</string>
 

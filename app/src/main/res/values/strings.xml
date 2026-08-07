@@ -294,6 +294,12 @@
     <string name="poster_downloaded_cd">Скачано</string>
     <string name="poster_watched_cd">Просмотрено</string>
 
+    <!-- Player screen -->
+    <string name="player_aspect_ratio_cd">Соотношение сторон</string>
+    <string name="player_aspect_fit">По размеру экрана</string>
+    <string name="player_aspect_zoom">Обрезать</string>
+    <string name="player_aspect_fill">Растянуть</string>
+
     <!-- Zoomable image dialog -->
     <string name="image_zoom_close_cd">Закрыть</string>
 

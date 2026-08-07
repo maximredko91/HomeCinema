@@ -191,6 +191,14 @@ fun DetailScreen(
                     }
                 }
                 Spacer(Modifier.width(16.dp))
+                // Title/original-title/tagline stay in this narrow column next to the fixed-
+                // height poster (tagline is usually long enough to roughly fill the poster's
+                // height on its own - leaving it out left the column noticeably shorter than the
+                // poster, an empty gap to the poster's right). Only the metadata chips moved to
+                // full width below: those used to be nested in here too, but a long tagline made
+                // this column taller than the poster (dead gap under it instead), and squeezed
+                // the chips into a column too narrow to fit more than two per row (stranding the
+                // year chip alone next to the category badge).
                 Column(Modifier.weight(1f)) {
                     Text(current.title, style = MaterialTheme.typography.titleLarge)
                     if (!current.originalTitle.isNullOrBlank()) {
@@ -208,38 +216,41 @@ fun DetailScreen(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    val releaseQuality = remember(current.videoFilePath) {
-                        extractReleaseQuality(current.videoFilePath.substringAfterLast('/'))
-                    }
-                    // Each chip gets an icon, not just a bare number/word - "2021" or "110 мин"
-                    // reads fine once you know it's a year or a runtime, but nothing on the
-                    // chip itself said which was which.
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (current.mediaType == MediaType.MOVIE || current.mediaType == MediaType.CARTOON) {
-                            CategoryChip(
-                                mediaType = current.mediaType,
-                                overridden = current.mediaTypeOverridden,
-                                onClick = { categoryDialogOpen = true }
-                            )
-                        }
-                        current.year?.let { MetaChip(it.toString(), icon = Icons.Default.CalendarMonth) }
-                        current.rating?.let { MetaChip("%.1f".format(it), icon = Icons.Default.Star) }
-                        current.runtimeMinutes?.let { MetaChip(stringResource(R.string.detail_runtime_minutes, it), icon = Icons.Default.Schedule) }
-                        current.country?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Public) }
-                        current.mpaa?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Shield) }
-                        releaseQuality?.let { MetaChip(it, icon = Icons.Default.HighQuality) }
-                        if (hasSubtitles == true) MetaChip(stringResource(R.string.detail_subtitles), icon = Icons.Default.ClosedCaption)
-                    }
-                    if (current.genres.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            current.genres,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
                 }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            val releaseQuality = remember(current.videoFilePath) {
+                extractReleaseQuality(current.videoFilePath.substringAfterLast('/'))
+            }
+            // Full width rather than squeezed next to the poster - fits more chips per row so
+            // related facts (year, rating, runtime...) group together instead of the row
+            // breaking after just one or two. Each chip gets an icon, not just a bare number/
+            // word - "2021" or "110 мин" reads fine once you know it's a year or a runtime, but
+            // nothing on the chip itself said which was which.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (current.mediaType == MediaType.MOVIE || current.mediaType == MediaType.CARTOON) {
+                    CategoryChip(
+                        mediaType = current.mediaType,
+                        overridden = current.mediaTypeOverridden,
+                        onClick = { categoryDialogOpen = true }
+                    )
+                }
+                current.year?.let { MetaChip(it.toString(), icon = Icons.Default.CalendarMonth) }
+                current.rating?.let { MetaChip("%.1f".format(it), icon = Icons.Default.Star) }
+                current.runtimeMinutes?.let { MetaChip(stringResource(R.string.detail_runtime_minutes, it), icon = Icons.Default.Schedule) }
+                current.country?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Public) }
+                current.mpaa?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Shield) }
+                releaseQuality?.let { MetaChip(it, icon = Icons.Default.HighQuality) }
+                if (hasSubtitles == true) MetaChip(stringResource(R.string.detail_subtitles), icon = Icons.Default.ClosedCaption)
+            }
+            if (current.genres.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    current.genres,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
             }
 
             Spacer(Modifier.height(20.dp))

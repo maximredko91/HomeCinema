@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -38,6 +40,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.media.DownloadStorage
@@ -97,6 +100,28 @@ fun PlayerScreen(itemId: String) {
         )
     }
     var indicatorMode by remember { mutableStateOf(GestureIndicatorMode.NONE) }
+
+    // MX Player-style aspect ratio cycling (fit -> crop -> stretch -> fit...), tap-triggered via
+    // a dedicated button rather than folded into the native settings gear since PlayerView has
+    // no built-in resize-mode control at all - see the settings-gear comment below for why
+    // playback speed/audio track don't need the same treatment (already native).
+    val resizeModes = remember {
+        listOf(
+            AspectRatioFrameLayout.RESIZE_MODE_FIT to R.string.player_aspect_fit,
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM to R.string.player_aspect_zoom,
+            AspectRatioFrameLayout.RESIZE_MODE_FILL to R.string.player_aspect_fill,
+        )
+    }
+    var resizeModeIndex by remember { mutableStateOf(0) }
+    var aspectChangeTick by remember { mutableStateOf(0) }
+    var showAspectLabel by remember { mutableStateOf(false) }
+
+    LaunchedEffect(aspectChangeTick) {
+        if (aspectChangeTick == 0) return@LaunchedEffect
+        showAspectLabel = true
+        delay(1200)
+        showAspectLabel = false
+    }
 
     fun applyBrightness(value: Float) {
         brightness = value.coerceIn(0.01f, 1f)
@@ -286,8 +311,37 @@ fun PlayerScreen(itemId: String) {
                     playerViewRef = this
                 }
             },
-            update = { view -> view.player = activePlayer }
+            update = { view ->
+                view.player = activePlayer
+                view.resizeMode = resizeModes[resizeModeIndex].first
+            }
         )
+
+        if (controllerVisible) {
+            IconButton(
+                onClick = {
+                    resizeModeIndex = (resizeModeIndex + 1) % resizeModes.size
+                    aspectChangeTick++
+                },
+                modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
+            ) {
+                Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio_cd), tint = Color.White)
+            }
+        }
+
+        if (showAspectLabel) {
+            Surface(
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Black.copy(alpha = 0.6f)
+            ) {
+                Text(
+                    text = stringResource(resizeModes[resizeModeIndex].second),
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
 
         // Only present while the native controller is hidden: it's a full-screen overlay,
         // so if it stayed up while the controller (play/pause/seek buttons, which sit
