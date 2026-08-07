@@ -10,6 +10,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.R
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.SmbSourceEntity
@@ -186,7 +187,7 @@ class DownloadWorker(appContext: Context, params: WorkerParameters) : CoroutineW
     private fun buildNotification(itemId: String, title: String, percent: Int) =
         NotificationCompat.Builder(applicationContext, HomeCinemaApp.DOWNLOAD_NOTIFICATION_CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText("Загрузка… $percent%")
+            .setContentText(applicationContext.getString(R.string.lib_downloading_percent, percent))
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, percent, false)
             .setOngoing(true)

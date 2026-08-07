@@ -7,9 +7,11 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 
 private val Context.dataStore by preferencesDataStore(name = "home_cinema_settings")
@@ -40,6 +42,11 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK, OLED, GLASS }
  * that reverting should be one tap, not a rebuild. */
 enum class LibraryLayout { CLASSIC, BOTTOM_NAV }
 
+/** Manual in-app language choice, independent of the device's system locale - see
+ * [com.homecinema.library.data.settings.LocaleHelper]. [tag] is the BCP-47 language tag used
+ * to build the [java.util.Locale] the app's Context gets wrapped with. */
+enum class AppLanguage(val tag: String) { RUSSIAN("ru"), ENGLISH("en") }
+
 class SettingsStore(private val context: Context) {
 
     private object Keys {
@@ -65,6 +72,7 @@ class SettingsStore(private val context: Context) {
         val PREFERRED_EXTERNAL_PLAYER_PACKAGE = stringPreferencesKey("preferred_external_player_package")
         val LIBRARY_LAYOUT = stringPreferencesKey("library_layout")
         val DOWNLOAD_FOLDER_URI = stringPreferencesKey("download_folder_uri")
+        val APP_LANGUAGE = stringPreferencesKey("app_language")
     }
 
     val configFlow: Flow<SmbConfig> = context.dataStore.data.map { prefs ->
@@ -285,6 +293,23 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DOWNLOAD_FOLDER_URI] = uri
         }
+    }
+
+    /** Defaults to Russian regardless of the device's system locale - the app had zero locale
+     * awareness before this setting existed and always showed Russian, so defaulting to
+     * anything else would silently change behavior for every existing install. */
+    val appLanguageFlow: Flow<AppLanguage> = context.dataStore.data.map { prefs ->
+        runCatching { AppLanguage.valueOf(prefs[Keys.APP_LANGUAGE] ?: "RUSSIAN") }
+            .getOrDefault(AppLanguage.RUSSIAN)
+    }
+
+    suspend fun saveAppLanguage(language: AppLanguage) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.APP_LANGUAGE] = language.name
+        }
+        // Also mirrored into a plain SharedPreferences - see LocaleHelper for why the DataStore
+        // value above can't be read synchronously at Application.attachBaseContext() time.
+        withContext(Dispatchers.IO) { LocaleHelper.saveSync(context, language) }
     }
 
     private fun parseSearchHistory(raw: String?): List<String> {

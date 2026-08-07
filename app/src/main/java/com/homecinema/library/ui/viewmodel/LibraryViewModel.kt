@@ -1,8 +1,10 @@
 package com.homecinema.library.ui.viewmodel
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.R
 import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
@@ -35,11 +37,11 @@ enum class LibraryFilter(val types: Set<MediaType>?) {
     CARTOON_SERIES(setOf(MediaType.CARTOON_SERIES))
 }
 
-enum class SortOrder(val label: String) {
-    TITLE("По названию"),
-    YEAR("По году"),
-    GENRE("По жанру"),
-    RATING("По рейтингу")
+enum class SortOrder(@StringRes val labelRes: Int) {
+    TITLE(R.string.sort_by_title),
+    YEAR(R.string.sort_by_year),
+    GENRE(R.string.sort_by_genre),
+    RATING(R.string.sort_by_rating)
 }
 
 enum class LibraryTab { ALL, COLLECTIONS, LISTS, HISTORY }

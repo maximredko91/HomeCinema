@@ -1,5 +1,8 @@
 package com.homecinema.library.data.update
 
+import android.content.Context
+import androidx.annotation.StringRes
+import com.homecinema.library.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -11,7 +14,7 @@ private const val LATEST_RELEASE_URL =
 
 data class ReleaseInfo(val version: String, val htmlUrl: String, val body: String, val apkUrl: String?)
 
-data class ReleaseNote(val version: String, val name: String, val body: String, val publishedAt: String)
+data class ReleaseNote(val version: String, val name: String, @StringRes val bodyRes: Int, val publishedAt: String)
 
 /**
  * Checks GitHub Releases for a newer build than the one installed. Distribution is manual
@@ -21,7 +24,7 @@ data class ReleaseNote(val version: String, val name: String, val body: String, 
  * distributed APK isn't safe to do.
  */
 object UpdateChecker {
-    suspend fun fetchLatestRelease(): ReleaseInfo? = withContext(Dispatchers.IO) {
+    suspend fun fetchLatestRelease(context: Context): ReleaseInfo? = withContext(Dispatchers.IO) {
         runCatching {
             val connection = (URL(LATEST_RELEASE_URL).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -40,7 +43,7 @@ object UpdateChecker {
             ReleaseInfo(
                 version = json.getString("tag_name").removePrefix("v"),
                 htmlUrl = json.getString("html_url"),
-                body = json.optString("body").ifBlank { "Без описания." },
+                body = json.optString("body").ifBlank { context.getString(R.string.update_no_description) },
                 apkUrl = apkUrl
             )
         }.getOrNull()

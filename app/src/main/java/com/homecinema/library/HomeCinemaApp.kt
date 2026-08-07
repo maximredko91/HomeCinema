@@ -3,11 +3,13 @@ package com.homecinema.library
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import com.homecinema.library.data.db.AppDatabase
 import com.homecinema.library.data.download.DownloadManager
 import com.homecinema.library.data.repository.LibraryRepository
 import com.homecinema.library.data.scanner.LibraryRescanWorker
 import com.homecinema.library.data.security.CredentialStore
+import com.homecinema.library.data.settings.LocaleHelper
 import com.homecinema.library.data.settings.SettingsStore
 import com.homecinema.library.data.smb.SmbManager
 import com.homecinema.library.data.smb.SmbSourceResolver
@@ -73,6 +75,10 @@ class HomeCinemaApp : Application() {
      * it's worth nudging the user to rescan. See checkForRescanSuggestion(). */
     val rescanSuggested: StateFlow<Boolean> = _rescanSuggested.asStateFlow()
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(LocaleHelper.wrap(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -117,7 +123,7 @@ class HomeCinemaApp : Application() {
      * blocking startup and silent on any failure (offline, GitHub down, whatever). */
     private fun checkForUpdate() {
         applicationScope.launch {
-            val release = UpdateChecker.fetchLatestRelease() ?: return@launch
+            val release = UpdateChecker.fetchLatestRelease(this@HomeCinemaApp) ?: return@launch
             val currentVersion = runCatching {
                 packageManager.getPackageInfo(packageName, 0).versionName
             }.getOrNull() ?: return@launch

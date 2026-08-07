@@ -23,10 +23,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.homecinema.library.R
 
 /** Fullscreen pinch-to-zoom/pan viewer for a poster or fanart image. */
 @Composable
@@ -67,7 +69,7 @@ fun ZoomableImageDialog(imagePath: String, onDismiss: () -> Unit) {
                     .statusBarsPadding()
                     .padding(8.dp)
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White, modifier = Modifier.size(28.dp))
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.image_zoom_close_cd), tint = Color.White, modifier = Modifier.size(28.dp))
             }
         }
     }

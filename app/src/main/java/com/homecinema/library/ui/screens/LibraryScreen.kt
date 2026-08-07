@@ -65,6 +65,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -241,9 +243,10 @@ fun LibraryScreen(
     val listsGridState = rememberLazyGridState()
     val pagerState = rememberPagerState(initialPage = libraryTab.ordinal) { LibraryTab.entries.size }
 
+    val favoritesLabel = stringResource(R.string.common_favorites)
     val selectedListName = when (selectedListId) {
         null -> null
-        FAVORITES_LIST_ID -> "Избранное"
+        FAVORITES_LIST_ID -> favoritesLabel
         else -> customLists.firstOrNull { it.id == selectedListId }?.name
     }
 
@@ -294,12 +297,13 @@ fun LibraryScreen(
     // to go back to) but easy to trigger by accident with an edge-swipe. One more tap/swipe
     // within 2s actually exits; the first one just warns instead.
     var backPressedOnce by remember { mutableStateOf(false) }
+    val exitToastMessage = stringResource(R.string.lib_exit_toast)
     BackHandler(enabled = selectedCollection == null && selectedListId == null && !searchActive) {
         if (backPressedOnce) {
             (context as? android.app.Activity)?.finish()
         } else {
             backPressedOnce = true
-            Toast.makeText(context, "Нажмите «назад» ещё раз, чтобы выйти", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, exitToastMessage, Toast.LENGTH_SHORT).show()
             playScope.launch {
                 delay(2000)
                 backPressedOnce = false
@@ -402,16 +406,16 @@ fun LibraryScreen(
                 val emptyOverride = if (items.isEmpty() && progress == null) {
                     when {
                         selectedListId == FAVORITES_LIST_ID -> LibraryEmptyOverride(
-                            title = "Пока ничего нет в избранном",
-                            subtitle = "Отмечайте фильмы и сериалы сердечком на странице описания, чтобы они появились здесь."
+                            title = stringResource(R.string.lib_empty_favorites_title),
+                            subtitle = stringResource(R.string.lib_empty_favorites_subtitle)
                         )
                         selectedListId != null -> LibraryEmptyOverride(
-                            title = "Список пуст",
-                            subtitle = "Добавьте фильмы или сериалы в этот список со страницы описания."
+                            title = stringResource(R.string.lib_empty_list_title),
+                            subtitle = stringResource(R.string.lib_empty_list_subtitle)
                         )
                         selectedCollection != null -> LibraryEmptyOverride(
-                            title = "В коллекции ничего нет",
-                            subtitle = "Похоже, все тайтлы из этой коллекции пропали из библиотеки."
+                            title = stringResource(R.string.lib_empty_collection_title),
+                            subtitle = stringResource(R.string.lib_empty_collection_subtitle)
                         )
                         else -> null
                     }
@@ -457,7 +461,7 @@ fun LibraryScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(searchFocusRequester),
-                            placeholder = { Text("Название, актёры, описание или #тег") },
+                            placeholder = { Text(stringResource(R.string.lib_search_placeholder)) },
                             singleLine = true,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
@@ -497,15 +501,15 @@ fun LibraryScreen(
                 navigationIcon = {
                     if (searchActive) {
                         IconButton(onClick = { closeSearch() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Закрыть поиск")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lib_cd_close_search))
                         }
                     } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
                         IconButton(onClick = { viewModel.clearCollectionSelection() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку коллекций")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lib_cd_back_to_collections))
                         }
                     } else if (libraryTab == LibraryTab.LISTS && selectedListId != null) {
                         IconButton(onClick = { viewModel.clearListSelection() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку списков")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lib_cd_back_to_lists))
                         }
                     }
                 },
@@ -513,31 +517,31 @@ fun LibraryScreen(
                     if (searchActive) {
                         if (query.isNotEmpty()) {
                             IconButton(onClick = { viewModel.setQuery("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Очистить")
+                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.lib_cd_clear))
                             }
                         }
                     } else {
                         if (showSearchAndFilters) {
                             IconButton(onClick = { searchActive = true }) {
-                                Icon(Icons.Default.Search, contentDescription = "Поиск")
+                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
                             }
                             BadgedBox(badge = { if (filtersActive) Badge() }) {
                                 IconButton(onClick = { filtersSheetOpen = true }) {
-                                    Icon(Icons.Default.FilterList, contentDescription = "Фильтры и сортировка")
+                                    Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.lib_cd_filters))
                                 }
                             }
                         }
                         IconButton(onClick = onOpenDownloads) {
-                            Icon(Icons.Default.Download, contentDescription = "Загрузки")
+                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.lib_cd_downloads))
                         }
                         IconButton(onClick = onOpenHistory) {
-                            Icon(Icons.Default.History, contentDescription = "История просмотров")
+                            Icon(Icons.Default.History, contentDescription = stringResource(R.string.lib_cd_history))
                         }
                         IconButton(onClick = { viewModel.rescan() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Сканировать библиотеку")
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.lib_cd_rescan))
                         }
                         IconButton(onClick = onOpenSettings) {
-                            Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.common_settings))
                         }
                     }
                 },
@@ -561,7 +565,7 @@ fun LibraryScreen(
                             if (libraryTab == LibraryTab.ALL) mediaTypeMenuOpen = true
                             else viewModel.setLibraryTab(LibraryTab.ALL)
                         },
-                        text = { Text("Библиотека") }
+                        text = { Text(stringResource(R.string.lib_tab_library)) }
                     )
                     MediaTypeFilterMenu(
                         expanded = mediaTypeMenuOpen,
@@ -572,12 +576,12 @@ fun LibraryScreen(
                     Tab(
                         selected = libraryTab == LibraryTab.COLLECTIONS,
                         onClick = { viewModel.setLibraryTab(LibraryTab.COLLECTIONS) },
-                        text = { Text("Коллекции") }
+                        text = { Text(stringResource(R.string.lib_tab_collections)) }
                     )
                     Tab(
                         selected = libraryTab == LibraryTab.LISTS,
                         onClick = { viewModel.setLibraryTab(LibraryTab.LISTS) },
-                        text = { Text("Списки") }
+                        text = { Text(stringResource(R.string.lib_tab_lists)) }
                     )
                 }
             }
@@ -634,7 +638,7 @@ fun LibraryScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(searchFocusRequester),
-                            placeholder = { Text("Название, актёры, описание или #тег") },
+                            placeholder = { Text(stringResource(R.string.lib_search_placeholder)) },
                             singleLine = true,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
@@ -674,15 +678,15 @@ fun LibraryScreen(
                 navigationIcon = {
                     if (searchActive) {
                         IconButton(onClick = { closeSearch() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Закрыть поиск")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lib_cd_close_search))
                         }
                     } else if (libraryTab == LibraryTab.COLLECTIONS && selectedCollection != null) {
                         IconButton(onClick = { viewModel.clearCollectionSelection() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку коллекций")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lib_cd_back_to_collections))
                         }
                     } else if (libraryTab == LibraryTab.LISTS && selectedListId != null) {
                         IconButton(onClick = { viewModel.clearListSelection() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К списку списков")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.lib_cd_back_to_lists))
                         }
                     }
                 },
@@ -690,28 +694,28 @@ fun LibraryScreen(
                     if (searchActive) {
                         if (query.isNotEmpty()) {
                             IconButton(onClick = { viewModel.setQuery("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Очистить")
+                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.lib_cd_clear))
                             }
                         }
                     } else {
                         if (showSearchAndFilters) {
                             IconButton(onClick = { searchActive = true }) {
-                                Icon(Icons.Default.Search, contentDescription = "Поиск")
+                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.common_search))
                             }
                             BadgedBox(badge = { if (filtersActive) Badge() }) {
                                 IconButton(onClick = { filtersSheetOpen = true }) {
-                                    Icon(Icons.Default.FilterList, contentDescription = "Фильтры и сортировка")
+                                    Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.lib_cd_filters))
                                 }
                             }
                         }
                         IconButton(onClick = onOpenDownloads) {
-                            Icon(Icons.Default.Download, contentDescription = "Загрузки")
+                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.lib_cd_downloads))
                         }
                         IconButton(onClick = { viewModel.rescan() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Сканировать библиотеку")
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.lib_cd_rescan))
                         }
                         IconButton(onClick = onOpenSettings) {
-                            Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.common_settings))
                         }
                     }
                 },
@@ -774,7 +778,7 @@ fun LibraryScreen(
                         else viewModel.setLibraryTab(LibraryTab.ALL)
                     },
                     icon = { Icon(Icons.Default.Movie, contentDescription = null) },
-                    label = { Text("Библиотека") }
+                    label = { Text(stringResource(R.string.lib_tab_library)) }
                 )
                 MediaTypeFilterMenu(
                     expanded = mediaTypeMenuOpen,
@@ -786,19 +790,19 @@ fun LibraryScreen(
                     selected = libraryTab == LibraryTab.COLLECTIONS,
                     onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.COLLECTIONS) },
                     icon = { Icon(Icons.Default.Collections, contentDescription = null) },
-                    label = { Text("Коллекции") }
+                    label = { Text(stringResource(R.string.lib_tab_collections)) }
                 )
                 NavigationBarItem(
                     selected = libraryTab == LibraryTab.LISTS,
                     onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.LISTS) },
                     icon = { Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null) },
-                    label = { Text("Списки") }
+                    label = { Text(stringResource(R.string.lib_tab_lists)) }
                 )
                 NavigationBarItem(
                     selected = libraryTab == LibraryTab.HISTORY,
                     onClick = { closeSearch(); viewModel.setLibraryTab(LibraryTab.HISTORY) },
                     icon = { Icon(Icons.Default.History, contentDescription = null) },
-                    label = { Text("История") }
+                    label = { Text(stringResource(R.string.lib_tab_history)) }
                 )
             }
             }
@@ -913,17 +917,17 @@ private fun LibraryGrid(
                 when {
                     !configured -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
                         EmptyState(
-                            title = "Подключение не настроено",
-                            subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
-                            actionLabel = "Открыть настройки",
+                            title = stringResource(R.string.lib_empty_not_configured_title),
+                            subtitle = stringResource(R.string.lib_empty_not_configured_subtitle),
+                            actionLabel = stringResource(R.string.common_open_settings),
                             onAction = onOpenSettings
                         )
                     }
                     items.isEmpty() && progress == null && query.isNotBlank() -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
                         EmptyState(
-                            title = "Ничего не найдено",
-                            subtitle = "По запросу «$query» ничего не нашлось. Попробуйте изменить фильтр или поисковый запрос.",
-                            actionLabel = "Очистить поиск",
+                            title = stringResource(R.string.lib_empty_no_results_title),
+                            subtitle = stringResource(R.string.lib_empty_no_results_subtitle, query),
+                            actionLabel = stringResource(R.string.lib_clear_search),
                             onAction = { onSetQuery("") }
                         )
                     }
@@ -937,9 +941,9 @@ private fun LibraryGrid(
                     }
                     items.isEmpty() && progress == null -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
                         EmptyState(
-                            title = if (filter == LibraryFilter.ALL) "Библиотека пуста" else "Ничего не найдено в этой категории",
-                            subtitle = "Нажмите на значок обновления вверху, чтобы просканировать диск и найти фильмы, сериалы и мультфильмы по .nfo файлам.",
-                            actionLabel = "Сканировать сейчас",
+                            title = if (filter == LibraryFilter.ALL) stringResource(R.string.lib_empty_library_title) else stringResource(R.string.lib_empty_category_title),
+                            subtitle = stringResource(R.string.lib_empty_library_subtitle),
+                            actionLabel = stringResource(R.string.lib_scan_now),
                             onAction = onRescan
                         )
                     }
@@ -1040,13 +1044,13 @@ private fun ContinueWatchingBar(item: MediaItemEntity, onClick: () -> Unit, onDi
                 Spacer(Modifier.width(8.dp))
                 Icon(
                     Icons.Default.PlayArrow,
-                    contentDescription = "Продолжить просмотр",
+                    contentDescription = stringResource(R.string.lib_cd_continue_watching),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Убрать из «Продолжить просмотр»",
+                        contentDescription = stringResource(R.string.lib_cd_remove_continue_watching),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -1075,17 +1079,17 @@ private fun CollectionsGrid(
     when {
         !configured -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
             EmptyState(
-                title = "Подключение не настроено",
-                subtitle = "Добавьте источник SMB-шары в настройках, чтобы начать сканирование библиотеки.",
-                actionLabel = "Открыть настройки",
+                title = stringResource(R.string.lib_empty_not_configured_title),
+                subtitle = stringResource(R.string.lib_empty_not_configured_subtitle),
+                actionLabel = stringResource(R.string.common_open_settings),
                 onAction = onOpenSettings
             )
         }
         collections.isEmpty() -> Box(Modifier.fillMaxSize().padding(top = topContentPadding)) {
             EmptyState(
-                title = "Коллекций не найдено",
-                subtitle = "Коллекции определяются по тегу <set> в .nfo файлах (например, наборы фильмов из Kodi/Radarr).",
-                actionLabel = "Открыть настройки",
+                title = stringResource(R.string.lib_collections_empty_title),
+                subtitle = stringResource(R.string.lib_collections_empty_subtitle),
+                actionLabel = stringResource(R.string.common_open_settings),
                 onAction = onOpenSettings
             )
         }
@@ -1145,7 +1149,7 @@ private fun ListsGrid(
         ) {
             item(key = FAVORITES_LIST_ID) {
                 ListCard(
-                    title = "Избранное",
+                    title = stringResource(R.string.common_favorites),
                     count = favoritesCount,
                     icon = Icons.Default.Favorite,
                     onClick = { onSelectList(FAVORITES_LIST_ID) }
@@ -1175,9 +1179,9 @@ private fun ListsGrid(
 
     if (showCreateDialog) {
         ListNameDialog(
-            title = "Новый список",
+            title = stringResource(R.string.lib_new_list_title),
             initialName = "",
-            confirmLabel = "Создать",
+            confirmLabel = stringResource(R.string.common_create),
             onConfirm = { name -> onCreateList(name) },
             onDismiss = { showCreateDialog = false }
         )
@@ -1185,9 +1189,9 @@ private fun ListsGrid(
 
     listToRename?.let { list ->
         ListNameDialog(
-            title = "Переименовать список",
+            title = stringResource(R.string.lib_rename_list_title),
             initialName = list.name,
-            confirmLabel = "Сохранить",
+            confirmLabel = stringResource(R.string.common_save),
             onConfirm = { name -> onRenameList(list.id, name) },
             onDismiss = { listToRename = null }
         )
@@ -1196,13 +1200,13 @@ private fun ListsGrid(
     listToDelete?.let { list ->
         AlertDialog(
             onDismissRequest = { listToDelete = null },
-            title = { Text("Удалить список «${list.name}»?") },
-            text = { Text("Фильмы из библиотеки не пропадут, удалится только сам список.") },
+            title = { Text(stringResource(R.string.lib_delete_list_title, list.name)) },
+            text = { Text(stringResource(R.string.lib_delete_list_message)) },
             confirmButton = {
-                TextButton(onClick = { onDeleteList(list.id); listToDelete = null }) { Text("Удалить") }
+                TextButton(onClick = { onDeleteList(list.id); listToDelete = null }) { Text(stringResource(R.string.common_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { listToDelete = null }) { Text("Отмена") }
+                TextButton(onClick = { listToDelete = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -1237,19 +1241,19 @@ private fun ListCard(
             if (onRename != null || onDelete != null) {
                 Box(Modifier.align(Alignment.TopEnd)) {
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Действия со списком", tint = Color.White)
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.lib_cd_list_actions), tint = Color.White)
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         onRename?.let { rename ->
                             DropdownMenuItem(
-                                text = { Text("Переименовать") },
+                                text = { Text(stringResource(R.string.common_rename)) },
                                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                                 onClick = { menuOpen = false; rename() }
                             )
                         }
                         onDelete?.let { delete ->
                             DropdownMenuItem(
-                                text = { Text("Удалить") },
+                                text = { Text(stringResource(R.string.common_delete)) },
                                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                 onClick = { menuOpen = false; delete() }
                             )
@@ -1267,7 +1271,7 @@ private fun ListCard(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "$count ${filmsWord(count)}",
+            text = pluralStringResource(R.plurals.films_count, count, count),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
         )
@@ -1288,14 +1292,14 @@ private fun CreateListCard(onClick: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = "Создать список",
+                contentDescription = stringResource(R.string.lib_create_list),
                 modifier = Modifier.size(40.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Создать список",
+            text = stringResource(R.string.lib_create_list),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -1319,7 +1323,7 @@ private fun ListNameDialog(
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                label = { Text("Название") },
+                label = { Text(stringResource(R.string.common_name)) },
                 modifier = Modifier.fillMaxWidth()
             )
         },
@@ -1330,7 +1334,7 @@ private fun ListNameDialog(
             ) { Text(confirmLabel) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         }
     )
 }
@@ -1363,7 +1367,7 @@ private fun CollectionCard(collection: CollectionSummary, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "${collection.count} ${filmsWord(collection.count)}",
+            text = pluralStringResource(R.plurals.films_count, collection.count, collection.count),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
         )
@@ -1394,14 +1398,14 @@ private fun ScrollJumpButtons(
         if (canScrollUp) {
             ScrollJumpButton(
                 icon = Icons.Default.KeyboardArrowUp,
-                contentDescription = "В начало списка",
+                contentDescription = stringResource(R.string.lib_cd_scroll_to_top),
                 onClick = { scope.launch { gridState.animateScrollToItem(0) } }
             )
         }
         if (canScrollDown) {
             ScrollJumpButton(
                 icon = Icons.Default.KeyboardArrowDown,
-                contentDescription = "В конец списка",
+                contentDescription = stringResource(R.string.lib_cd_scroll_to_bottom),
                 onClick = { scope.launch { gridState.animateScrollToItem((itemCount - 1).coerceAtLeast(0)) } }
             )
         }
@@ -1424,17 +1428,6 @@ private fun ScrollJumpButton(icon: ImageVector, contentDescription: String, onCl
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Icon(icon, contentDescription = contentDescription)
         }
-    }
-}
-
-internal fun filmsWord(count: Int): String {
-    val rem100 = count % 100
-    val rem10 = count % 10
-    return when {
-        rem100 in 11..14 -> "фильмов"
-        rem10 == 1 -> "фильм"
-        rem10 in 2..4 -> "фильма"
-        else -> "фильмов"
     }
 }
 
@@ -1523,7 +1516,7 @@ private fun SearchHistoryPanel(
         if (history.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    "История поиска пуста",
+                    stringResource(R.string.lib_search_history_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -1534,11 +1527,11 @@ private fun SearchHistoryPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "История поиска",
+                    stringResource(R.string.lib_search_history_title),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = onClearAll) { Text("Очистить всё") }
+                TextButton(onClick = onClearAll) { Text(stringResource(R.string.lib_clear_all)) }
             }
             history.forEach { entry ->
                 Row(
@@ -1557,7 +1550,7 @@ private fun SearchHistoryPanel(
                     Spacer(Modifier.width(12.dp))
                     Text(entry, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     IconButton(onClick = { onRemove(entry) }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Удалить «$entry» из истории")
+                        Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.lib_remove_from_history, entry))
                     }
                 }
             }
@@ -1565,14 +1558,14 @@ private fun SearchHistoryPanel(
     }
 }
 
-private data class FilterOption(val filter: LibraryFilter, val label: String)
+private data class FilterOption(val filter: LibraryFilter, @androidx.annotation.StringRes val labelRes: Int)
 
 private val FILTER_OPTIONS = listOf(
-    FilterOption(LibraryFilter.ALL, "Всё"),
-    FilterOption(LibraryFilter.MOVIES, "Фильмы"),
-    FilterOption(LibraryFilter.TV_SHOWS, "Сериалы"),
-    FilterOption(LibraryFilter.CARTOONS, "Мультфильмы"),
-    FilterOption(LibraryFilter.CARTOON_SERIES, "Мультсериалы")
+    FilterOption(LibraryFilter.ALL, R.string.filter_all),
+    FilterOption(LibraryFilter.MOVIES, R.string.filter_movies),
+    FilterOption(LibraryFilter.TV_SHOWS, R.string.filter_tv_shows),
+    FilterOption(LibraryFilter.CARTOONS, R.string.filter_cartoons),
+    FilterOption(LibraryFilter.CARTOON_SERIES, R.string.filter_cartoon_series)
 )
 
 /**
@@ -1616,44 +1609,45 @@ private fun FiltersSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
-            Text("Фильтры и сортировка", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.lib_cd_filters), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(16.dp))
 
-            Text("Категория", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.lib_category), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FILTER_OPTIONS.forEach { option ->
                     val count = categoryCounts[option.filter]
+                    val label = stringResource(option.labelRes)
                     FilterChip(
                         selected = filter == option.filter,
                         onClick = { onSetFilter(option.filter) },
-                        label = { Text(if (count != null) "${option.label} ($count)" else option.label) }
+                        label = { Text(if (count != null) "$label ($count)" else label) }
                     )
                 }
             }
 
             Spacer(Modifier.height(20.dp))
-            Text("Сортировка", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.lib_sort), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SortOrder.entries.forEach { option ->
                     FilterChip(
                         selected = sortOrder == option,
                         onClick = { onSetSortOrder(option) },
-                        label = { Text(option.label) }
+                        label = { Text(stringResource(option.labelRes)) }
                     )
                 }
             }
 
             if (availableGenres.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
-                Text("Жанр", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.lib_genre), style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(8.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = selectedGenre == null,
                         onClick = { onSetGenre(null) },
-                        label = { Text("Все жанры") }
+                        label = { Text(stringResource(R.string.lib_all_genres)) }
                     )
                     availableGenres.forEach { genre ->
                         FilterChip(
@@ -1668,7 +1662,7 @@ private fun FiltersSheet(
             if (availableYearBounds != null) {
                 Spacer(Modifier.height(20.dp))
                 Text(
-                    "Год выпуска: ${yearSliderValue.start.roundToInt()} – ${yearSliderValue.endInclusive.roundToInt()}",
+                    stringResource(R.string.lib_year_range, yearSliderValue.start.roundToInt(), yearSliderValue.endInclusive.roundToInt()),
                     style = MaterialTheme.typography.titleSmall
                 )
                 Spacer(Modifier.height(8.dp))
@@ -1689,9 +1683,9 @@ private fun FiltersSheet(
                     onSetFilter(LibraryFilter.ALL)
                     onSetGenre(null)
                     onSetYearRange(null)
-                }) { Text("Сбросить фильтры") }
+                }) { Text(stringResource(R.string.lib_reset_filters)) }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = onDismiss) { Text("Готово") }
+                Button(onClick = onDismiss) { Text(stringResource(R.string.common_done)) }
             }
         }
     }
@@ -1739,7 +1733,7 @@ private fun MediaTypeFilterMenu(
         FILTER_OPTIONS.forEach { option ->
             if (option.filter == LibraryFilter.ALL || (categoryCounts[option.filter] ?: 0) > 0) {
                 DropdownMenuItem(
-                    text = { Text(option.label) },
+                    text = { Text(stringResource(option.labelRes)) },
                     onClick = {
                         onSelect(option.filter)
                         onDismissRequest()
@@ -1767,9 +1761,9 @@ private fun UpdateAvailableBanner(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Доступна версия ${release.version}", modifier = Modifier.weight(1f))
-            TextButton(onClick = { dialogOpen = true }) { Text("Подробнее") }
-            TextButton(onClick = onDismiss) { Text("Закрыть") }
+            Text(stringResource(R.string.lib_update_available, release.version), modifier = Modifier.weight(1f))
+            TextButton(onClick = { dialogOpen = true }) { Text(stringResource(R.string.lib_more_details)) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
         }
     }
 
@@ -1798,11 +1792,11 @@ private fun RescanSuggestedBanner(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Новая версия могла добавить новые данные — пересканировать библиотеку?",
+                stringResource(R.string.lib_rescan_suggested_message),
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onRescan) { Text("Сканировать") }
-            TextButton(onClick = onDismiss) { Text("Позже") }
+            TextButton(onClick = onRescan) { Text(stringResource(R.string.lib_scan)) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.lib_later)) }
         }
     }
 }
@@ -1845,6 +1839,7 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<UpdateDownloadState>(UpdateDownloadState.Idle) }
+    val downloadFailedMessage = stringResource(R.string.lib_update_download_failed)
 
     fun startDownload(apkUrl: String) {
         state = UpdateDownloadState.Downloading(0)
@@ -1855,14 +1850,14 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
                 installApk(context, file)
                 onDismiss()
             }.onFailure { e ->
-                state = UpdateDownloadState.Failed(e.message ?: "Не удалось скачать обновление")
+                state = UpdateDownloadState.Failed(e.message ?: downloadFailedMessage)
             }
         }
     }
 
     AlertDialog(
         onDismissRequest = { if (state !is UpdateDownloadState.Downloading) onDismiss() },
-        title = { Text("Версия ${release.version}") },
+        title = { Text(stringResource(R.string.lib_version_x, release.version)) },
         text = {
             // No visible scrollbar by default on a plain verticalScroll Column - with a long
             // changelog entry there was nothing on screen hinting there was more to read below
@@ -1873,7 +1868,7 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
                     val current = state
                     when (current) {
                         is UpdateDownloadState.Downloading -> {
-                            Text("Загрузка… ${current.percent}%")
+                            Text(stringResource(R.string.lib_downloading_percent, current.percent))
                             Spacer(Modifier.height(8.dp))
                             LinearProgressIndicator(
                                 progress = { current.percent / 100f },
@@ -1888,7 +1883,7 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
                         UpdateDownloadState.Idle -> {
                             if (release.apkUrl == null) {
                                 Text(
-                                    "Файл сборки не найден в этом релизе.",
+                                    stringResource(R.string.lib_no_apk_in_release),
                                     color = MaterialTheme.colorScheme.error
                                 )
                                 Spacer(Modifier.height(12.dp))
@@ -1916,11 +1911,11 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
                                     )
                                 )
                             }
-                        }) { Text("Установить") }
+                        }) { Text(stringResource(R.string.lib_install)) }
                     } else {
                         TextButton(onClick = {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)))
-                        }) { Text("Открыть на GitHub") }
+                        }) { Text(stringResource(R.string.lib_open_on_github)) }
                     }
                 }
                 is UpdateDownloadState.Downloading -> {}
@@ -1930,7 +1925,7 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
             TextButton(
                 onClick = onDismiss,
                 enabled = state !is UpdateDownloadState.Downloading
-            ) { Text("Отмена") }
+            ) { Text(stringResource(R.string.common_cancel)) }
         }
     )
 }
@@ -1947,10 +1942,11 @@ private fun installApk(context: Context, file: File) {
 /** Builds a short human-readable summary of whatever category/genre/year filter is active,
  * e.g. "Мультфильмы, Комедия, 2010–2020" - shown so an active filter narrowing search results
  * doesn't quietly read as "search is broken." */
+@Composable
 private fun describeActiveFilters(filter: LibraryFilter, genre: String?, yearRange: IntRange?): String {
     val parts = mutableListOf<String>()
     if (filter != LibraryFilter.ALL) {
-        FILTER_OPTIONS.firstOrNull { it.filter == filter }?.let { parts += it.label }
+        FILTER_OPTIONS.firstOrNull { it.filter == filter }?.let { parts += stringResource(it.labelRes) }
     }
     if (genre != null) parts += genre
     if (yearRange != null) parts += "${yearRange.first}–${yearRange.last}"
@@ -1974,11 +1970,11 @@ private fun ActiveFilterDuringSearchBanner(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Поиск ограничен фильтром «$filterLabel»",
+                stringResource(R.string.lib_search_limited_by_filter, filterLabel),
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onClearFilter) { Text("Сбросить") }
+            TextButton(onClick = onClearFilter) { Text(stringResource(R.string.common_reset)) }
         }
     }
 }
@@ -2003,13 +1999,13 @@ private fun ScanProgressBanner(
                 is ScanProgress.Scanning -> {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
-                    Text("Обход папок на диске… найдено видео: ${progress.filesFound}")
+                    Text(stringResource(R.string.lib_scanning_progress, progress.filesFound))
                 }
                 is ScanProgress.Parsing -> {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text("Разбор ${progress.current}/${progress.total}")
+                        Text(stringResource(R.string.lib_parsing_progress, progress.current, progress.total))
                         Text(
                             progress.currentTitle,
                             style = MaterialTheme.typography.bodySmall,
@@ -2018,17 +2014,17 @@ private fun ScanProgressBanner(
                     }
                 }
                 is ScanProgress.Done -> {
-                    Text("Готово: найдено ${progress.itemsFound} тайтлов")
+                    Text(stringResource(R.string.lib_scan_done, progress.itemsFound))
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("ОК") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_ok)) }
                 }
                 is ScanProgress.Error -> {
                     Text(
-                        "Ошибка сканирования: ${progress.message}",
+                        stringResource(R.string.lib_scan_error, progress.message),
                         color = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("Закрыть") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) }
                 }
             }
         }

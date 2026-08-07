@@ -25,16 +25,19 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.homecinema.library.R
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.nfo.looksAnimated
 
+@Composable
 private fun categoryLabel(mediaType: MediaType): String = when (mediaType) {
-    MediaType.MOVIE -> "Фильм"
-    MediaType.CARTOON -> "Мультфильм"
-    MediaType.TV_SHOW -> "Сериал"
-    MediaType.CARTOON_SERIES -> "Мультсериал"
+    MediaType.MOVIE -> stringResource(R.string.category_movie)
+    MediaType.CARTOON -> stringResource(R.string.category_cartoon)
+    MediaType.TV_SHOW -> stringResource(R.string.category_tv_show)
+    MediaType.CARTOON_SERIES -> stringResource(R.string.category_cartoon_series)
     MediaType.EPISODE -> ""
 }
 
@@ -77,7 +80,7 @@ fun CategoryChip(mediaType: MediaType, overridden: Boolean, onClick: () -> Unit)
             Text(categoryLabel(mediaType), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (overridden) {
                 Spacer(Modifier.width(4.dp))
-                Icon(Icons.Default.Edit, contentDescription = "Изменено вручную", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(11.dp))
+                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.category_manual_override_cd), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(11.dp))
             }
         }
     }
@@ -104,12 +107,11 @@ fun CategoryOverrideDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Категория") },
+        title = { Text(stringResource(R.string.category_dialog_title)) },
         text = {
             Column {
                 Text(
-                    "По жанрам из .nfo автоматически определено: «${categoryLabel(autoDetected)}». " +
-                        "Если это неверно (жанр не заполнен или указан неточно), можно выбрать вручную.",
+                    stringResource(R.string.category_dialog_description, categoryLabel(autoDetected)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
@@ -127,13 +129,13 @@ fun CategoryOverrideDialog(
                 if (currentOverridden) {
                     Spacer(Modifier.height(8.dp))
                     TextButton(onClick = { onSelect(autoDetected, false); onDismiss() }) {
-                        Text("Определять автоматически (сброс)")
+                        Text(stringResource(R.string.category_reset_to_auto))
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } }
     )
 }
 

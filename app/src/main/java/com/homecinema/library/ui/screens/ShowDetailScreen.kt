@@ -20,9 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.R
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
 import com.homecinema.library.data.settings.PlaybackMode
@@ -66,7 +68,7 @@ fun ShowDetailScreen(
                 title = { Text(show?.title.orEmpty()) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
@@ -80,7 +82,7 @@ fun ShowDetailScreen(
                 Modifier.fillMaxSize().glassBackdrop().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Серии не найдены — попробуйте пересканировать библиотеку")
+                Text(stringResource(R.string.show_no_episodes))
             }
             return@Scaffold
         }
@@ -100,7 +102,7 @@ fun ShowDetailScreen(
             bySeason.forEach { (season, seasonEpisodes) ->
                 item {
                     Text(
-                        "Сезон $season",
+                        stringResource(R.string.show_season_x, season),
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
@@ -187,7 +189,7 @@ private fun ShowHeader(show: MediaItemEntity, onImageClick: (String) -> Unit, on
                 val meta = buildList {
                     show.year?.let { add(it.toString()) }
                     show.rating?.let { add("★ ${"%.1f".format(it)}") }
-                    show.runtimeMinutes?.let { add("$it мин/серия") }
+                    show.runtimeMinutes?.let { add(stringResource(R.string.show_runtime_per_episode, it)) }
                     show.country?.takeIf { it.isNotBlank() }?.let { add(it) }
                 }.joinToString("  •  ")
                 if (meta.isNotBlank()) {
@@ -206,21 +208,21 @@ private fun ShowHeader(show: MediaItemEntity, onImageClick: (String) -> Unit, on
 
         if (show.plot.isNotBlank()) {
             Spacer(Modifier.height(16.dp))
-            Text("Описание", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.detail_plot), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(show.plot, style = MaterialTheme.typography.bodyMedium)
         }
 
         if (!show.director.isNullOrBlank()) {
             Spacer(Modifier.height(12.dp))
-            Text("Режиссёр", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.detail_director), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(show.director, style = MaterialTheme.typography.bodyMedium)
         }
 
         if (!show.actors.isNullOrBlank()) {
             Spacer(Modifier.height(12.dp))
-            Text("В ролях", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.detail_cast), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(show.actors, style = MaterialTheme.typography.bodyMedium)
         }
@@ -273,7 +275,7 @@ private fun EpisodeRow(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                "Серия ${episode.episodeNumber ?: "?"}",
+                stringResource(R.string.show_episode_number, episode.episodeNumber?.toString() ?: "?"),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -283,7 +285,7 @@ private fun EpisodeRow(
                     Spacer(Modifier.width(6.dp))
                     Icon(
                         Icons.Default.Visibility,
-                        contentDescription = "Просмотрено",
+                        contentDescription = stringResource(R.string.show_watched),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -304,7 +306,7 @@ private fun EpisodeRow(
                     TextButton(onClick = onPlay) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Смотреть")
+                        Text(stringResource(R.string.detail_watch))
                     }
                 } else {
                     // Forced external is the only option here, so it looks like a plain
@@ -314,7 +316,7 @@ private fun EpisodeRow(
                     TextButton(onClick = onPlayExternally) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Смотреть")
+                        Text(stringResource(R.string.detail_watch))
                     }
                 }
                 if (playbackMode == PlaybackMode.ASK) {
@@ -325,7 +327,7 @@ private fun EpisodeRow(
                     ) {
                         Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Внешний плеер")
+                        Text(stringResource(R.string.show_external_player))
                     }
                 }
             }

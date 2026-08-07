@@ -1,6 +1,7 @@
 package com.homecinema.library.data.scanner
 
 import android.content.Context
+import com.homecinema.library.R
 import com.homecinema.library.data.db.LibraryDao
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
@@ -92,7 +93,7 @@ class LibraryScanner(
                 try {
                     allResults += scanSource(source, onProgress)
                 } catch (e: Exception) {
-                    errors += "«${source.name}»: ${e.toSmbUserMessage()}"
+                    errors += "«${source.name}»: ${e.toSmbUserMessage(context)}"
                 }
             }
 
@@ -110,12 +111,12 @@ class LibraryScanner(
             // it should mean "how many cards did this add", not "how many rows got written".
             val topLevelCount = allResults.count { it.mediaType != MediaType.EPISODE }
             if (errors.isNotEmpty()) {
-                onProgress(ScanProgress.Error("Найдено $topLevelCount тайтлов. Ошибки: ${errors.joinToString("; ")}"))
+                onProgress(ScanProgress.Error(context.getString(R.string.scan_error_summary, topLevelCount, errors.joinToString("; "))))
             } else {
                 onProgress(ScanProgress.Done(topLevelCount))
             }
         } catch (e: Exception) {
-            onProgress(ScanProgress.Error(e.toSmbUserMessage()))
+            onProgress(ScanProgress.Error(e.toSmbUserMessage(context)))
         }
     }
 

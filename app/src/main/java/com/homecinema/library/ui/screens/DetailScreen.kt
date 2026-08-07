@@ -38,8 +38,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.homecinema.library.R
 import coil.compose.AsyncImage
 import com.homecinema.library.HomeCinemaApp
 import com.homecinema.library.data.db.CustomListEntity
@@ -104,7 +106,7 @@ fun DetailScreen(
                 title = { Text(item?.title.orEmpty()) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
@@ -112,11 +114,11 @@ fun DetailScreen(
                         IconButton(onClick = { scope.launch { app.repository.setFavorite(current.id, !current.isFavorite) } }) {
                             Icon(
                                 imageVector = if (current.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = if (current.isFavorite) "Убрать из избранного" else "В избранное"
+                                contentDescription = if (current.isFavorite) stringResource(R.string.detail_remove_favorite) else stringResource(R.string.detail_add_favorite)
                             )
                         }
                         IconButton(onClick = { addToListSheetOpen = true }) {
-                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Добавить в список")
+                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = stringResource(R.string.detail_add_to_list))
                         }
                     }
                 },
@@ -223,11 +225,11 @@ fun DetailScreen(
                         }
                         current.year?.let { MetaChip(it.toString(), icon = Icons.Default.CalendarMonth) }
                         current.rating?.let { MetaChip("%.1f".format(it), icon = Icons.Default.Star) }
-                        current.runtimeMinutes?.let { MetaChip("$it мин", icon = Icons.Default.Schedule) }
+                        current.runtimeMinutes?.let { MetaChip(stringResource(R.string.detail_runtime_minutes, it), icon = Icons.Default.Schedule) }
                         current.country?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Public) }
                         current.mpaa?.takeIf { it.isNotBlank() }?.let { MetaChip(it, icon = Icons.Default.Shield) }
                         releaseQuality?.let { MetaChip(it, icon = Icons.Default.HighQuality) }
-                        if (hasSubtitles == true) MetaChip("Субтитры", icon = Icons.Default.ClosedCaption)
+                        if (hasSubtitles == true) MetaChip(stringResource(R.string.detail_subtitles), icon = Icons.Default.ClosedCaption)
                     }
                     if (current.genres.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
@@ -244,7 +246,7 @@ fun DetailScreen(
 
             if (isShow) {
                 Button(onClick = { onOpenShow(current.id) }, modifier = Modifier.fillMaxWidth().height(DetailActionButtonHeight)) {
-                    Text("Список серий")
+                    Text(stringResource(R.string.detail_episode_list))
                 }
             } else {
                 // All three actions share one row, equal width - previously "Внешний плеер"
@@ -259,7 +261,7 @@ fun DetailScreen(
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Смотреть")
+                            Text(stringResource(R.string.detail_watch))
                         }
                     } else {
                         // Forced external is the only option here, so it doesn't need its own
@@ -272,7 +274,7 @@ fun DetailScreen(
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Смотреть")
+                            Text(stringResource(R.string.detail_watch))
                         }
                     }
                     if (playbackMode == PlaybackMode.ASK) {
@@ -285,7 +287,7 @@ fun DetailScreen(
                         ) {
                             Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Внешний", maxLines = 1)
+                            Text(stringResource(R.string.detail_external), maxLines = 1)
                         }
                     }
                 }
@@ -308,14 +310,14 @@ fun DetailScreen(
 
             if (!current.studio.isNullOrBlank()) {
                 Spacer(Modifier.height(16.dp))
-                Text("Студия", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.detail_studio), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 Text(current.studio, style = MaterialTheme.typography.bodyMedium)
             }
 
             if (current.plot.isNotBlank()) {
                 Spacer(Modifier.height(20.dp))
-                Text("Описание", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.detail_plot), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 Text(current.plot, style = MaterialTheme.typography.bodyMedium)
             }
@@ -323,7 +325,7 @@ fun DetailScreen(
             if (!current.director.isNullOrBlank()) {
                 val directorText = current.director
                 Spacer(Modifier.height(16.dp))
-                Text("Режиссёр", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.detail_director), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 val directors = remember(directorText) {
                     directorText.split(",").map { it.trim() }.filter { it.isNotBlank() }
@@ -347,7 +349,7 @@ fun DetailScreen(
             if (!current.actors.isNullOrBlank()) {
                 val actorsText = current.actors
                 Spacer(Modifier.height(16.dp))
-                Text("В ролях", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.detail_cast), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 val actors = remember(actorsText) {
                     actorsText.split(",").map { it.trim() }.filter { it.isNotBlank() }
@@ -375,7 +377,7 @@ fun DetailScreen(
                 }
                 if (collectionItems.isNotEmpty()) {
                     Spacer(Modifier.height(20.dp))
-                    Text("Другие фильмы из коллекции «$collectionName»", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.detail_other_collection_titles, collectionName), style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(10.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(collectionItems, key = { it.id }) { collectionItem ->
@@ -432,8 +434,8 @@ fun DetailScreen(
 
     directorSheetName?.let { director ->
         PersonFilmographySheet(
-            title = "Фильмы режиссёра «$director»",
-            emptyMessage = "Другие фильмы этого режиссёра в библиотеке не найдены.",
+            title = stringResource(R.string.detail_director_filmography_title, director),
+            emptyMessage = stringResource(R.string.detail_director_filmography_empty),
             items = libraryItems.filter { other ->
                 other.id != itemId &&
                     other.director.orEmpty().split(",").map { it.trim() }
@@ -449,8 +451,8 @@ fun DetailScreen(
 
     actorSheetName?.let { actor ->
         PersonFilmographySheet(
-            title = "Фильмы с «$actor»",
-            emptyMessage = "Другие фильмы с этим актёром в библиотеке не найдены.",
+            title = stringResource(R.string.detail_actor_filmography_title, actor),
+            emptyMessage = stringResource(R.string.detail_actor_filmography_empty),
             items = libraryItems.filter { other ->
                 other.id != itemId &&
                     other.actors.orEmpty().split(",").map { it.trim() }
@@ -551,12 +553,12 @@ private fun AddToListSheet(
         containerColor = glassSheetContainerColor
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-            Text("Добавить в список", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.detail_add_to_list), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(12.dp))
 
             if (customLists.isEmpty()) {
                 Text(
-                    "Пока нет ни одного списка - создайте его ниже.",
+                    stringResource(R.string.detail_no_lists_yet),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
@@ -586,7 +588,7 @@ private fun AddToListSheet(
                     value = newListName,
                     onValueChange = { newListName = it },
                     singleLine = true,
-                    label = { Text("Новый список") },
+                    label = { Text(stringResource(R.string.lib_new_list_title)) },
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -596,7 +598,7 @@ private fun AddToListSheet(
                         onCreateAndAdd(newListName.trim())
                         newListName = ""
                     }
-                ) { Text("Создать и добавить") }
+                ) { Text(stringResource(R.string.detail_create_and_add)) }
             }
         }
     }

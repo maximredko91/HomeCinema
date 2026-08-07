@@ -15,8 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.R
 import com.homecinema.library.ui.components.MediaPosterCard
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
 import com.homecinema.library.ui.theme.glassBackdrop
@@ -61,12 +63,12 @@ fun DownloadsScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text(if (selectionMode) "Выбрано: ${selectedIds.size}" else "Загрузки") },
+                title = { Text(if (selectionMode) stringResource(R.string.downloads_selected_count, selectedIds.size) else stringResource(R.string.downloads_title)) },
                 navigationIcon = {
                     IconButton(onClick = { if (selectionMode) selectedIds = emptySet() else onBack() }) {
                         Icon(
                             if (selectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (selectionMode) "Отменить выбор" else "Назад"
+                            contentDescription = if (selectionMode) stringResource(R.string.downloads_cancel_selection) else stringResource(R.string.common_back)
                         )
                     }
                 },
@@ -78,7 +80,7 @@ fun DownloadsScreen(
                         }) {
                             Icon(
                                 if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
-                                contentDescription = if (allSelected) "Снять выделение" else "Выбрать всё"
+                                contentDescription = if (allSelected) stringResource(R.string.downloads_deselect_all) else stringResource(R.string.downloads_select_all)
                             )
                         }
                         IconButton(onClick = {
@@ -86,7 +88,7 @@ fun DownloadsScreen(
                             selectedIds = emptySet()
                             scope.launch { toDelete.forEach { app.downloadManager.deleteDownload(it) } }
                         }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Удалить выбранное")
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.downloads_delete_selected))
                         }
                     }
                 },
@@ -102,7 +104,7 @@ fun DownloadsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "Пока ничего не скачано.\nСкачанные фильмы, мультфильмы и серии можно смотреть без сети.",
+                    stringResource(R.string.downloads_empty_message),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )

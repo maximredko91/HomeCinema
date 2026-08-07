@@ -19,7 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.homecinema.library.R
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.MediaItemEntity
 
@@ -64,12 +66,12 @@ fun DownloadControlRow(
                     strokeWidth = 2.dp
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Загрузка… $liveProgress%")
+                Text(stringResource(R.string.download_in_progress, liveProgress))
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = onCancel, modifier = Modifier.height(32.dp)) {
                     Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Отмена")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         }
@@ -80,10 +82,10 @@ fun DownloadControlRow(
                 // Full text, no truncation - the delete action lost its text label instead (an
                 // icon-only button below) to free up the room, rather than trading the two off
                 // against each other. Ellipsis on this text left it unclear what it even said.
-                Text("Скачано, доступно офлайн")
+                Text(stringResource(R.string.download_completed))
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Удалить загрузку", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.download_delete_cd), modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -91,7 +93,7 @@ fun DownloadControlRow(
             OutlinedButton(onClick = onDownload, modifier = modifier.height(DetailActionButtonHeight)) {
                 Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(if (item.downloadState == DownloadState.FAILED) "Повторить загрузку" else "Скачать")
+                Text(if (item.downloadState == DownloadState.FAILED) stringResource(R.string.download_retry) else stringResource(R.string.download_start))
             }
         }
     }

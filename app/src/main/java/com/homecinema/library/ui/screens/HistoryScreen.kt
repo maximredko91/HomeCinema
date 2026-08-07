@@ -14,11 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.R
 import com.homecinema.library.data.db.MediaItemEntity
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.homecinema.library.ui.theme.ProvideGlassHazeState
@@ -51,10 +53,10 @@ fun HistoryScreen(onBack: () -> Unit, onOpenDetail: (String) -> Unit) {
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text("История просмотров") },
+                title = { Text(stringResource(R.string.history_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 colors = homeCinemaTopAppBarColors(),
@@ -88,7 +90,7 @@ fun HistoryContent(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                "Здесь появится то, что вы уже смотрели.",
+                stringResource(R.string.history_empty_message),
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
@@ -112,7 +114,10 @@ fun HistoryContent(
     }
 }
 
-private val historyDateFormat = SimpleDateFormat("d MMMM, HH:mm", Locale.Builder().setLanguage("ru").build())
+// Locale.getDefault() reflects the chosen app language process-wide - LocaleHelper.wrap() sets
+// it explicitly, and a language change always goes through a full process restart, so this
+// stays correct without needing to react to the setting itself.
+private val historyDateFormat = SimpleDateFormat("d MMMM, HH:mm", Locale.getDefault())
 
 @Composable
 private fun HistoryRow(item: MediaItemEntity, onClick: () -> Unit) {
@@ -149,14 +154,15 @@ private fun HistoryRow(item: MediaItemEntity, onClick: () -> Unit) {
                     Spacer(Modifier.width(6.dp))
                     Icon(
                         Icons.Default.Visibility,
-                        contentDescription = "Просмотрено",
+                        contentDescription = stringResource(R.string.show_watched),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
+            val seasonEpisode = item.season?.let { s -> item.episodeNumber?.let { e -> stringResource(R.string.history_season_episode, s, e) } }
             val subtitle = buildList {
-                item.season?.let { s -> item.episodeNumber?.let { e -> add("Сезон $s, серия $e") } }
+                seasonEpisode?.let { add(it) }
                 item.year?.let { add(it.toString()) }
             }.joinToString(" • ")
             if (subtitle.isNotBlank()) {

@@ -1,6 +1,7 @@
 package com.homecinema.library.data.repository
 
 import android.content.Context
+import com.homecinema.library.R
 import com.homecinema.library.data.db.CustomListEntity
 import com.homecinema.library.data.db.LibraryDao
 import com.homecinema.library.data.db.ListCountRow
@@ -140,7 +141,7 @@ class LibraryRepository(
         sourceDao.upsert(
             SmbSourceEntity(
                 id = id,
-                name = "Основной",
+                name = context.getString(R.string.legacy_source_default_name),
                 host = legacy.host,
                 share = legacy.share,
                 rootPath = legacy.rootPath,

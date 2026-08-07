@@ -1,6 +1,7 @@
 package com.homecinema.library
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.homecinema.library.data.settings.LocaleHelper
 import com.homecinema.library.data.settings.ThemeMode
 import com.homecinema.library.ui.navigation.AppNavHost
 import com.homecinema.library.ui.theme.AccentColor
@@ -40,6 +42,10 @@ class MainActivity : ComponentActivity() {
     // extra has to be picked up in onNewIntent() too, and both paths feed the same mutable
     // state so AppNavHost can react to either.
     private val pendingPlayerItemId = mutableStateOf<String?>(null)
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

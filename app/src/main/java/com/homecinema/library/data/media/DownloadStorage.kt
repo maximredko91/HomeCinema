@@ -8,6 +8,7 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
+import com.homecinema.library.R
 import com.homecinema.library.data.db.MediaItemEntity
 import java.io.IOException
 import java.io.OutputStream
@@ -59,10 +60,10 @@ object DownloadStorage {
     ): Uri {
         if (customTreeUri != null) {
             val folder = findOrCreateSafFolder(context, customTreeUri, item)
-                ?: throw IOException("Не удалось открыть выбранную папку для загрузок")
+                ?: throw IOException(context.getString(R.string.download_storage_err_open_custom_folder))
             folder.findFile(fileName)?.let { return it.uri }
             return folder.createFile(mimeType, fileName)?.uri
-                ?: throw IOException("Не удалось создать файл в выбранной папке")
+                ?: throw IOException(context.getString(R.string.download_storage_err_create_in_custom_folder))
         }
 
         val relativePath = relativePathFor(item)
@@ -75,7 +76,7 @@ object DownloadStorage {
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         return context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: throw IOException("Не удалось создать файл в Download/HomeCinema")
+            ?: throw IOException(context.getString(R.string.download_storage_err_create_default))
     }
 
     private fun findOrCreateSafFolder(context: Context, treeUri: Uri, item: MediaItemEntity): DocumentFile? {
@@ -112,7 +113,7 @@ object DownloadStorage {
      * it left off instead of the ContentResolver truncating the file back to empty first. */
     fun openOutputStream(context: Context, uri: Uri, append: Boolean): OutputStream =
         context.contentResolver.openOutputStream(uri, if (append) "wa" else "w")
-            ?: throw IOException("Не удалось открыть файл для записи")
+            ?: throw IOException(context.getString(R.string.download_storage_err_open_output))
 
     /** Clears IS_PENDING once writing is finished - required before any other app (a file
      * manager, an external player) can see or read a MediaStore-backed download at all. A SAF

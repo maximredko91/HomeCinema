@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.homecinema.library.MainActivity
 import com.homecinema.library.HomeCinemaApp
+import com.homecinema.library.R
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -126,11 +127,11 @@ class StreamingService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, HomeCinemaApp.STREAMING_NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Воспроизведение во внешнем плеере")
+            .setContentTitle(getString(R.string.streaming_notification_channel_name))
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setOngoing(true)
             .setContentIntent(openAppIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Остановить", stopIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.streaming_notification_stop), stopIntent)
             .build()
     }
 

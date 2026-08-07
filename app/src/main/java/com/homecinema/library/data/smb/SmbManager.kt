@@ -110,7 +110,7 @@ class SmbManager {
         // an empty folder would be, so a broken source and a genuinely empty share both
         // silently produced "0 titles found" with no way to tell them apart.
         val rootChildren = root.listFiles()
-            ?: throw java.io.IOException("Папка «${config.share}» недоступна или не существует")
+            ?: throw ShareUnavailableException(config.share)
 
         val out = ConcurrentLinkedQueue<SmbFile>()
         // onFileFound fires for every file as the walk finds it (previously nothing was

@@ -1,0 +1,345 @@
+<resources>
+    <string name="download_notification_channel_name">Downloads</string>
+    <string name="streaming_notification_channel_name">External player playback</string>
+    <string name="playback_notification_channel_name">Video playback</string>
+
+    <string name="settings_language">Language</string>
+    <string name="settings_language_russian">Русский</string>
+    <string name="settings_language_english">English</string>
+
+    <!-- Common, reused across many screens -->
+    <string name="common_cancel">Cancel</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_close">Close</string>
+    <string name="common_ok">OK</string>
+    <string name="common_save">Save</string>
+    <string name="common_create">Create</string>
+    <string name="common_rename">Rename</string>
+    <string name="common_settings">Settings</string>
+    <string name="common_search">Search</string>
+    <string name="common_done">Done</string>
+    <string name="common_reset">Reset</string>
+    <string name="common_open_settings">Open Settings</string>
+    <string name="common_name">Name</string>
+    <string name="common_favorites">Favorites</string>
+
+    <!-- Library screen -->
+    <string name="lib_search_placeholder">Title, cast, plot, or #tag</string>
+    <string name="lib_cd_close_search">Close search</string>
+    <string name="lib_cd_back_to_collections">Back to collections</string>
+    <string name="lib_cd_back_to_lists">Back to lists</string>
+    <string name="lib_cd_clear">Clear</string>
+    <string name="lib_cd_filters">Filters and sorting</string>
+    <string name="lib_cd_downloads">Downloads</string>
+    <string name="lib_cd_history">Watch history</string>
+    <string name="lib_cd_rescan">Scan library</string>
+    <string name="lib_tab_library">Library</string>
+    <string name="lib_tab_collections">Collections</string>
+    <string name="lib_tab_lists">Lists</string>
+    <string name="lib_tab_history">History</string>
+    <string name="lib_cd_continue_watching">Resume playback</string>
+    <string name="lib_cd_remove_continue_watching">Remove from Continue Watching</string>
+    <string name="lib_exit_toast">Press back again to exit</string>
+    <string name="lib_empty_favorites_title">Nothing in favorites yet</string>
+    <string name="lib_empty_favorites_subtitle">Tap the heart on a title\'s page to add it here.</string>
+    <string name="lib_empty_list_title">List is empty</string>
+    <string name="lib_empty_list_subtitle">Add movies or shows to this list from their page.</string>
+    <string name="lib_empty_collection_title">Nothing in this collection</string>
+    <string name="lib_empty_collection_subtitle">It looks like every title in this collection is gone from the library.</string>
+    <string name="lib_empty_not_configured_title">No source configured</string>
+    <string name="lib_empty_not_configured_subtitle">Add an SMB source in Settings to start scanning your library.</string>
+    <string name="lib_empty_no_results_title">No results</string>
+    <string name="lib_empty_no_results_subtitle">No results for “%1$s”. Try a different filter or search.</string>
+    <string name="lib_clear_search">Clear search</string>
+    <string name="lib_empty_library_title">Library is empty</string>
+    <string name="lib_empty_category_title">Nothing found in this category</string>
+    <string name="lib_empty_library_subtitle">Tap the refresh icon above to scan your disk for movies, shows, and cartoons via .nfo files.</string>
+    <string name="lib_scan_now">Scan now</string>
+    <string name="lib_cd_scroll_to_top">Scroll to top</string>
+    <string name="lib_cd_scroll_to_bottom">Scroll to bottom</string>
+    <plurals name="films_count">
+        <item quantity="one">%1$d title</item>
+        <item quantity="other">%1$d titles</item>
+    </plurals>
+    <string name="lib_collections_empty_title">No collections found</string>
+    <string name="lib_collections_empty_subtitle">Collections come from the &lt;set&gt; tag in .nfo files (e.g. Kodi/Radarr movie sets).</string>
+    <string name="lib_cd_list_actions">List actions</string>
+    <string name="lib_create_list">Create list</string>
+    <string name="lib_new_list_title">New list</string>
+    <string name="lib_rename_list_title">Rename list</string>
+    <string name="lib_delete_list_title">Delete list “%1$s”?</string>
+    <string name="lib_delete_list_message">Titles stay in your library — only the list itself is deleted.</string>
+    <string name="lib_search_history_empty">No search history yet</string>
+    <string name="lib_search_history_title">Search history</string>
+    <string name="lib_clear_all">Clear all</string>
+    <string name="lib_remove_from_history">Remove “%1$s” from history</string>
+    <string name="filter_all">All</string>
+    <string name="filter_movies">Movies</string>
+    <string name="filter_tv_shows">TV Shows</string>
+    <string name="filter_cartoons">Cartoons</string>
+    <string name="filter_cartoon_series">Cartoon Series</string>
+    <string name="lib_category">Category</string>
+    <string name="lib_sort">Sort</string>
+    <string name="lib_genre">Genre</string>
+    <string name="lib_all_genres">All genres</string>
+    <string name="lib_year_range">Release year: %1$d – %2$d</string>
+    <string name="lib_reset_filters">Reset filters</string>
+    <string name="lib_update_available">Version %1$s available</string>
+    <string name="lib_more_details">Details</string>
+    <string name="lib_rescan_suggested_message">The new version may have added new data — rescan your library?</string>
+    <string name="lib_scan">Scan</string>
+    <string name="lib_later">Later</string>
+    <string name="lib_update_download_failed">Couldn\'t download the update</string>
+    <string name="lib_version_x">Version %1$s</string>
+    <string name="lib_downloading_percent">Downloading… %1$d%%</string>
+    <string name="lib_no_apk_in_release">No build file found in this release.</string>
+    <string name="lib_install">Install</string>
+    <string name="lib_open_on_github">Open on GitHub</string>
+    <string name="lib_search_limited_by_filter">Search limited by filter “%1$s”</string>
+    <string name="lib_scanning_progress">Scanning folders… videos found: %1$d</string>
+    <string name="lib_parsing_progress">Parsing %1$d/%2$d</string>
+    <string name="lib_scan_done">Done: found %1$d titles</string>
+    <string name="lib_scan_error">Scan error: %1$s</string>
+    <string name="sort_by_title">By title</string>
+    <string name="sort_by_year">By year</string>
+    <string name="sort_by_genre">By genre</string>
+    <string name="sort_by_rating">By rating</string>
+
+    <string name="glass_bg_indigo">Indigo</string>
+    <string name="glass_bg_charcoal">Charcoal</string>
+    <string name="glass_bg_midnight">Midnight Blue</string>
+    <string name="glass_bg_emerald">Emerald</string>
+    <string name="glass_bg_wine">Wine</string>
+    <string name="glass_bg_true_black">Black</string>
+    <string name="accent_gold">Gold</string>
+    <string name="accent_blue">Blue</string>
+    <string name="accent_green">Green</string>
+    <string name="accent_red">Red</string>
+    <string name="accent_purple">Purple</string>
+    <string name="accent_teal">Teal</string>
+    <string name="accent_pink">Pink</string>
+
+    <!-- Settings -->
+    <string name="common_back">Back</string>
+    <string name="common_expand">Expand</string>
+    <string name="common_collapse">Collapse</string>
+    <string name="settings_sources_title">Sources (SMB)</string>
+    <string name="settings_not_configured">Not configured</string>
+    <plurals name="sources_count">
+        <item quantity="one">%1$d source</item>
+        <item quantity="other">%1$d sources</item>
+    </plurals>
+    <string name="settings_autoupdate_on">Auto-refresh on</string>
+    <string name="settings_autoupdate_off">Auto-refresh off</string>
+    <string name="settings_playback_title">Playback</string>
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_storage_title">Storage</string>
+    <string name="settings_storage_subtitle">Poster and backdrop cache</string>
+    <string name="settings_changelog_title">Changelog</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_sources_description">The library can be built from several network shares at once — for example, movies and shows kept on separate drives.</string>
+    <string name="settings_sources_empty">No sources configured yet</string>
+    <string name="settings_add_source">Add source</string>
+    <string name="settings_autoupdate_label">Auto-refresh</string>
+    <string name="settings_autoupdate_description">Check sources for new files on app launch (at most once a day)</string>
+    <string name="settings_external_player_label">External player</string>
+    <string name="settings_external_player_description">Which app to open for external playback</string>
+    <string name="settings_always_ask">Always ask</string>
+    <string name="settings_nav_style_label">Library navigation</string>
+    <string name="settings_nav_bottom">New — tabs at the bottom</string>
+    <string name="settings_nav_classic">Classic — tabs and icons at the top</string>
+    <string name="settings_theme_label">Theme</string>
+    <string name="settings_glass_bg_label">Glass background color</string>
+    <string name="settings_glass_opacity">Glass opacity: %1$d%%</string>
+    <string name="settings_glass_opacity_description">Higher reads more clearly, lower gives a stronger see-through glass effect</string>
+    <string name="settings_grid_columns_label">Grid columns</string>
+    <string name="settings_accent_color_label">Accent color</string>
+    <string name="settings_alphabet_index_label">Alphabet index</string>
+    <string name="settings_alphabet_index_description">A letter rail beside the grid for quick scrolling</string>
+    <string name="settings_cache_description">Movie posters and backdrops are cached locally so they don\'t need to be re-fetched from disk every time.</string>
+    <string name="settings_cache_cleared_message">Poster cache cleared, refresh your library</string>
+    <string name="settings_clearing">Clearing…</string>
+    <string name="settings_clear_cache">Clear poster cache</string>
+    <string name="settings_download_location_label">Where downloads are saved</string>
+    <string name="settings_choose_folder">Choose folder…</string>
+    <string name="settings_default">Default</string>
+    <string name="settings_download_location_note">Only applies to new downloads — anything already downloaded stays where it is.</string>
+    <string name="settings_default_download_path">Download/HomeCinema (default)</string>
+    <string name="settings_selected_folder_fallback">Selected folder</string>
+    <string name="settings_edit_source_cd">Edit “%1$s”</string>
+    <string name="settings_delete_source_cd">Delete “%1$s”</string>
+    <string name="settings_new_source_title">New source</string>
+    <string name="settings_edit_source_title">Edit source</string>
+    <string name="settings_source_name_label">Name, e.g. “Living Room NAS”</string>
+    <string name="settings_source_host_label">IP address, e.g. 192.168.1.1</string>
+    <string name="settings_source_share_label">Share name</string>
+    <string name="settings_source_rootpath_label">Subfolder inside the share (optional)</string>
+    <string name="settings_guest_access">Guest access</string>
+    <string name="settings_username_label">Username</string>
+    <string name="settings_password_label">Password</string>
+    <string name="settings_domain_label">Domain (optional)</string>
+    <string name="settings_connection_success">Connection successful</string>
+    <string name="settings_share_not_found">Share not found — check its name and path.</string>
+    <string name="settings_testing">Testing…</string>
+    <string name="settings_test_connection">Test connection</string>
+
+    <string name="playback_mode_internal">Internal player</string>
+    <string name="playback_mode_external">External player</string>
+    <string name="playback_mode_ask">Ask every time</string>
+    <string name="theme_mode_system">Follow system</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="theme_mode_oled">OLED (true black)</string>
+    <string name="theme_mode_glass">Glass</string>
+
+    <string name="about_description">A personal media center for movies, shows, and cartoons straight from a network share (SMB) — no streaming services or subscriptions.</string>
+    <string name="about_features_title">Features</string>
+    <string name="about_tech_title">Technology</string>
+    <string name="about_licenses_title">Open-source licenses</string>
+    <string name="about_feature_1">Multiple SMB sources at once, scheduled library auto-refresh</string>
+    <string name="about_feature_2">Auto-scan via .nfo (Kodi format): posters, backdrops with fullscreen viewing, sidecar subtitles, episode thumbnails</string>
+    <string name="about_feature_3">Categories (movies/shows/cartoons/cartoon series), collections via the &lt;set&gt; tag, your own lists and favorites</string>
+    <string name="about_feature_4">Search by title, plot, cast, and tags — #tag understands Russian queries too; search history</string>
+    <string name="about_feature_5">Filter by genre and year, sorting, adjustable grid columns (scales for landscape), alphabet index</string>
+    <string name="about_feature_6">Resume playback from where you left off, watched markers, and a dedicated watch history screen</string>
+    <string name="about_feature_7">Download to device for offline viewing</string>
+    <string name="about_feature_8">Player: subtitles, audio track switching, brightness/volume gestures, fullscreen mode</string>
+    <string name="about_feature_9">External player choice — ask every time or pin a specific app</string>
+    <string name="about_feature_10">Themes: system, light, dark, OLED, and Glass (real backdrop blur) — with accent color choice</string>
+    <string name="about_feature_11">Checks GitHub for updates and installs the new version right from the app</string>
+    <string name="about_feature_12">SMB source passwords are stored encrypted (Android Keystore), never in plain text</string>
+    <string name="about_tech_1">Kotlin + Jetpack Compose (Material 3)</string>
+    <string name="about_tech_2">Media3 / ExoPlayer — video playback</string>
+    <string name="about_tech_3">Room — local library cache</string>
+    <string name="about_tech_4">Jetpack DataStore — app settings</string>
+    <string name="about_tech_5">androidx.security-crypto — encrypts saved passwords</string>
+    <string name="about_tech_6">Coil — image loading</string>
+    <string name="about_tech_7">jcifs-ng + Bouncy Castle — SMB2/3 client and NTLM auth</string>
+    <string name="about_tech_8">Kotlin Coroutines &amp; Flow</string>
+    <string name="about_license_1">Kotlin, kotlinx.coroutines — Apache License 2.0</string>
+    <string name="about_license_2">AndroidX (Compose, Navigation, Room, DataStore, Media3, Lifecycle, Security-Crypto) — Apache License 2.0</string>
+    <string name="about_license_3">Coil — Apache License 2.0</string>
+    <string name="about_license_4">jcifs-ng — GNU Lesser General Public License v2.1</string>
+    <string name="about_license_5">Bouncy Castle — Bouncy Castle License (MIT-like)</string>
+    <string name="about_license_6">Russian-English tag search dictionary — FreeDict / WikDict, based on Wiktionary.org — Creative Commons Attribution-ShareAlike 3.0</string>
+
+    <!-- Detail screen -->
+    <string name="detail_remove_favorite">Remove from favorites</string>
+    <string name="detail_add_favorite">Add to favorites</string>
+    <string name="detail_add_to_list">Add to list</string>
+    <string name="detail_runtime_minutes">%1$d min</string>
+    <string name="detail_subtitles">Subtitles</string>
+    <string name="detail_episode_list">Episode list</string>
+    <string name="detail_watch">Watch</string>
+    <string name="detail_external">External</string>
+    <string name="detail_studio">Studio</string>
+    <string name="detail_plot">Plot</string>
+    <string name="detail_director">Director</string>
+    <string name="detail_cast">Cast</string>
+    <string name="detail_other_collection_titles">Other titles in “%1$s”</string>
+    <string name="detail_director_filmography_title">Directed by “%1$s”</string>
+    <string name="detail_director_filmography_empty">No other titles by this director found in your library.</string>
+    <string name="detail_actor_filmography_title">Starring “%1$s”</string>
+    <string name="detail_actor_filmography_empty">No other titles with this actor found in your library.</string>
+    <string name="detail_no_lists_yet">No lists yet — create one below.</string>
+    <string name="detail_create_and_add">Create and add</string>
+
+    <!-- Show detail screen -->
+    <string name="show_no_episodes">No episodes found — try rescanning your library</string>
+    <string name="show_season_x">Season %1$d</string>
+    <string name="show_runtime_per_episode">%1$d min/episode</string>
+    <string name="show_episode_number">Episode %1$s</string>
+    <string name="show_watched">Watched</string>
+    <string name="show_external_player">External player</string>
+
+    <!-- Downloads screen -->
+    <string name="downloads_title">Downloads</string>
+    <string name="downloads_selected_count">Selected: %1$d</string>
+    <string name="downloads_cancel_selection">Cancel selection</string>
+    <string name="downloads_deselect_all">Deselect all</string>
+    <string name="downloads_select_all">Select all</string>
+    <string name="downloads_delete_selected">Delete selected</string>
+    <string name="downloads_empty_message">Nothing downloaded yet.\nDownloaded movies, cartoons, and episodes can be watched offline.</string>
+
+    <!-- History screen -->
+    <string name="history_title">Watch history</string>
+    <string name="history_empty_message">Things you\'ve already watched will show up here.</string>
+    <string name="history_season_episode">Season %1$d, episode %2$d</string>
+
+    <!-- Category override chip/dialog -->
+    <string name="category_movie">Movie</string>
+    <string name="category_cartoon">Cartoon</string>
+    <string name="category_tv_show">TV Show</string>
+    <string name="category_cartoon_series">Cartoon Series</string>
+    <string name="category_manual_override_cd">Manually changed</string>
+    <string name="category_dialog_title">Category</string>
+    <string name="category_dialog_description">Automatically detected from the .nfo genre: “%1$s”. If that\'s wrong (empty or imprecise genre), you can pick it manually.</string>
+    <string name="category_reset_to_auto">Detect automatically (reset)</string>
+
+    <!-- Download control row -->
+    <string name="download_in_progress">Downloading… %1$d%%</string>
+    <string name="download_completed">Downloaded, available offline</string>
+    <string name="download_delete_cd">Delete download</string>
+    <string name="download_retry">Retry download</string>
+    <string name="download_start">Download</string>
+
+    <!-- Media poster card -->
+    <string name="poster_favorite_cd">Favorited</string>
+    <string name="poster_selected_cd">Selected</string>
+    <string name="poster_downloaded_cd">Downloaded</string>
+    <string name="poster_watched_cd">Watched</string>
+
+    <!-- Zoomable image dialog -->
+    <string name="image_zoom_close_cd">Close</string>
+
+    <!-- SMB error messages -->
+    <string name="smb_err_connection">Error connecting to the server.</string>
+    <string name="smb_err_crypto">This device is missing required encryption algorithms. Try reinstalling the app.</string>
+    <string name="smb_err_host_not_found">Server “%1$s” not found — check the address.</string>
+    <string name="smb_err_unreachable">Server unreachable — check that it\'s powered on and on the same network.</string>
+    <string name="smb_err_timeout">Server isn\'t responding — check your network connection.</string>
+    <string name="smb_err_unknown">Unknown error</string>
+    <string name="smb_err_wrong_password">Wrong username or password.</string>
+    <string name="smb_err_access_denied">Access denied — check the folder\'s permissions on the server.</string>
+    <string name="smb_err_account_locked">The account is locked on the server.</string>
+    <string name="smb_err_account_disabled">The account is disabled on the server.</string>
+    <string name="smb_err_password_expired">The server password has expired — update it.</string>
+    <string name="smb_err_share_not_found">Share not found — check its name.</string>
+    <string name="smb_err_path_not_found">The specified path was not found on the server.</string>
+    <string name="smb_err_share_unavailable">Share “%1$s” is unavailable or doesn\'t exist</string>
+    <string name="streaming_notification_stop">Stop</string>
+    <string name="update_no_description">No description.</string>
+    <string name="scan_error_summary">Found %1$d titles. Errors: %2$s</string>
+    <string name="download_storage_err_open_custom_folder">Couldn\'t open the selected download folder</string>
+    <string name="download_storage_err_create_in_custom_folder">Couldn\'t create a file in the selected folder</string>
+    <string name="download_storage_err_create_default">Couldn\'t create a file in Download/HomeCinema</string>
+    <string name="download_storage_err_open_output">Couldn\'t open the file for writing</string>
+    <string name="legacy_source_default_name">Primary</string>
+
+    <!-- Changelog history -->
+    <string name="changelog_1_21">The app is now available in English — a Language switch in Settings → Appearance (Русский/English), independent of the system language. The whole interface is translated, including this changelog.</string>
+    <string name="changelog_1_20">Manual category correction for Movie/Cartoon and TV Show/Cartoon Series — if the .nfo genre is empty or imprecise and a title ends up under the wrong tab, you can now fix it by hand: the category chip on its page opens a choice between the two options, or a reset back to automatic genre-based detection. A manual choice persists and survives future library rescans.</string>
+    <string name="changelog_1_19">History now opens as a tab inside the library (swipe next to Library/Collections/Lists), styled the same way — it used to open as a separate screen.\n\nThe top bar now smoothly hides on scroll-down and returns on scroll-up on every screen in the app (movie/show page, Downloads, History, all settings sections), not just the library.</string>
+    <string name="changelog_1_18">Downloads are now saved to the public Download/HomeCinema folder (visible in any file manager, survives clearing the app\'s data and even uninstalling it) instead of the app\'s private cache, which Android sometimes clears on its own — that was the actual cause of downloaded movies disappearing before. Alongside the video, matching .nfo and subtitle files are now downloaded too, each title in its own named folder.\n\nSettings → Storage — you can point downloads at your own folder (via the system picker, including an SD card) instead of the default location; the same screen shows exactly where downloads are currently being saved.\n\nDownloads — long-pressing a card turns on multi-select, so you can delete several titles at once or select them all.\n\nContinue Watching moved into its own bar above the bottom navigation (thumbnail, title, resume button) instead of a row inside the top bar — it used to slide away and back together with the bar on scroll.\n\nFixed: the Delete button on a downloaded title\'s status pill got clipped when space was tight.</string>
+    <string name="changelog_1_17">Playback notification mini-player — playing something in the internal player now shows a system notification with a poster and play/pause controls; tapping it jumps straight back into that title, even if the app had been fully closed.\n\nThe top bar now smoothly hides on scroll-down and returns on scroll-up, freeing up more room for cards.\n\nOn the root tabs (Library/Collections/Lists with no search or open collection), the back button/gesture now needs a second press within 2 seconds to actually exit — protection against closing the app by accident.</string>
+    <string name="changelog_1_16">Downloads now shows posters as a grid, like the main library — tapping a card opens the movie/episode\'s page, which already has internal and external playback plus deleting the download.\n\nLibrary — tapping the already-active Library tab again opens a quick type picker: Movies/TV Shows/Cartoons/Cartoon Series (only categories that actually exist on disk are shown).\n\nSwiping between library tabs is no longer intercepted by the system back gesture on phones with gesture navigation — a swipe too close to the edge used to sometimes background the app instead of switching tabs.\n\nA light vibration during library scrolling as the index passes each letter of the alphabet.\n\nFloating bars (top and bottom) now sit flush against the top and bottom edges of the screen — there used to be an empty gap.\n\nExternal playback for downloaded titles is now available from the title\'s own page (alongside the Downloads grid redesign).\n\nThe external-player playback notification now closes automatically when the app is closed (swiped away from Recents) — it used to linger until the 6-hour safety timeout or a manual Stop tap.</string>
+    <string name="changelog_1_15">Important fix: rescanning the library (including the automatic nightly one) reset the Favorite flag on every title. If you ever lost your favorites before, this was the cause — the flag no longer gets cleared.\n\nNew navigation — the Library/Collections/Lists/History tabs moved to the bottom of the screen, within thumb reach; the logo, search, filters, downloads, library refresh, and settings stayed at the top. A Classic/New switch lives in Settings → Appearance → Library navigation, so you can go back to the old layout any time. Every bar (top and bottom) now shares the same floating look: inset from the screen edges (matters on phones with strongly rounded corners) and real glass blur in the Glass theme.\n\nContinue Watching and History now also work for external playback, not just the internal player — previously only what you watched inside the app ended up there. Internal-playback history is now recorded immediately too, instead of after a few seconds\' delay.\n\nContinue Watching also launches the external player when it\'s set to Always external — it used to always open the internal player regardless of that setting.\n\nAn empty list (e.g. an empty Favorites) no longer suggests "scan your library" — that message never fit a simply-empty list.\n\nThe "rescan your library" hint after an app update now only appears when the new version actually added new .nfo fields — it used to show up after every single update, even ones with nothing new to scan for.\n\nThe changelog and the pre-install "what\'s new" dialog are now formatted as a bulleted list instead of one solid paragraph.\n\nFixed: the "found N titles" counter after a scan counted every episode of a show as its own title, inflating the number; the update check only ran on a cold start, not when returning to the foreground; the version changelog dialog gave no hint that its text could be scrolled further; the external-player playback notification didn\'t open the app when tapped and had no way to dismiss it manually before the 6-hour safety timeout.</string>
+    <string name="changelog_1_14">Russian #tag search now understands almost any everyday word ("рыцарь"/knight, "вампир"/vampire, etc.), not just the ~800 pre-built ones — the dictionary grew to ~40,000 words (source: FreeDict/Wiktionary).\n\nLibrary scanning — the "Parsing X/Y" counter now only counts what will actually become its own card; "Scanning folders on disk" now grows as the scan progresses and counts only videos, not .nfo/subtitle/image files too.\n\nThe external player picker in Settings no longer shows only system apps — Android was hiding third-party players (MX Player, etc.) without a manifest declaration, which is now in place.\n\nPlayer — removed the duplicate settings gear: subtitles and audio tracks now live only in the native player controls, no second hand-rolled one on top.\n\nMovie page — the Watch/External/Download buttons now share one size and style; year/rating/runtime/country/age rating/quality are now separate labeled pills with icons instead of one truncating line of text; a subtitle-availability badge was added.\n\nLandscape orientation — the grid column count (Library, Collections, Lists) now adapts to the screen\'s width and height instead of staying fixed — cards no longer spill off the edge of the screen.\n\nFixed: switching between Library/Collections/Lists tabs could fail to register when skipping over a tab; the scroll-to-top/bottom buttons were redrawn (on some devices the round shadowed button rendered as a polygon instead of a circle).</string>
+    <string name="changelog_1_13_02">Fixed card jitter while scrolling the library. Cause: the alphabet rail on the right sometimes appeared and disappeared during ordinary vertical scrolling (not just during a swipe between tabs, which is what that hiding behavior was originally built for), which kept changing the card grid\'s width.</string>
+    <string name="changelog_1_13_01">Subtitles — .srt/.ass/.ssa/.sub/.vtt files next to a video now attach automatically, in the internal player (both SMB streaming and a downloaded file) and in an external one (passed via launch parameters, if the player supports it).\n\nWatch history — a new screen (icon in the library header) with everything you\'ve watched, including already-finished titles.\n\nExternal player choice — in Settings → Playback you can pin a specific app instead of choosing every time.\n\nRescan hint — after an update that adds new .nfo fields, you\'re now offered a library rescan.\n\nSmall fixes: a duplicate "External player" button in the episode list, the alphabet rail flickering during a tab swipe, the external-player button\'s color/size on a movie card, a standalone subtitles button in the internal player that lingered even without subtitles — subtitles and audio track are now together in one settings icon.</string>
+    <string name="changelog_1_12">Actor filmography — tapping an actor\'s name on a movie page now opens a list of their other titles, same as it already did for directors. Names with no other titles in your library are no longer highlighted or clickable, so they don\'t look misleadingly tappable.\n\nNew .nfo fields on the movie page: tagline, studio, age rating.\n\nRelease quality (e.g. "1080p BDRip"), detected from the filename and shown next to the year and rating.\n\nExternal playback now tries to resume from the saved position (not supported by every player).</string>
+    <string name="changelog_1_11">Tag search now understands Russian. Values of the .nfo &lt;tag&gt; field are almost always in English (heist, pirates, etc.) — you can now type "#ограбление" or "#пираты" in Russian, and it\'s silently translated and matched against the English tags in the background, with no change needed to how you type the query.</string>
+    <string name="changelog_1_10_01">The changelog now works offline — it used to load the version list from GitHub and was unavailable without a connection. Each version is now collapsed by default so the list doesn\'t stretch out too long.\n\nThe Glass theme\'s background color swatches are brighter and more distinct now.</string>
+    <string name="changelog_1_10">Settings redesigned. Instead of one long list, there\'s now a compact list of sections (Sources, Library, Playback, Appearance, Storage, Changelog, About) — each with a short subtitle showing its current value. Tapping one opens that section\'s own screen.</string>
+    <string name="changelog_1_9">Search history. Opening search with an empty field now shows a list of recent queries — tap one to reuse it, remove a specific entry, or clear the whole history at once.</string>
+    <string name="changelog_1_8">Swipe between library tabs. You can now switch between Library, Collections, and Lists with a left/right swipe across the screen, not just by tapping a tab.</string>
+    <string name="changelog_1_7">Glass theme opacity control — a "Glass opacity" slider (40–95%) was added to Settings. Panels used to be a fixed level of translucency that made arrows and text hard to make out — now you can make them read more clearly.\n\nGlass theme background color choice — 6 ready-made presets (indigo, charcoal, midnight blue, emerald, wine, black) instead of one fixed color.</string>
+    <string name="changelog_1_6_02">Critical fix: external-player playback finally stopped cutting out after a few minutes. The real cause: MX Player doesn\'t keep one connection open the whole time — it downloads data in short local-network bursts and plays for long stretches from its own already-downloaded buffer. The internal safety timer was raised from 5 minutes to 6 hours.</string>
+    <string name="changelog_1_6">App updates can now be downloaded and installed right from within the app. When a new version is available, the banner gets a Details button showing the changelog and letting you decide whether to install. The Install button downloads the APK inside the app and immediately offers to install it — no more manually visiting the GitHub page.</string>
+    <string name="changelog_1_5_01">External playback (e.g. MX Player) no longer cuts out after ~5 minutes with a "Cannot play this link" error.</string>
+    <string name="changelog_1_5">Adaptive title font size in the library grid — long titles now shrink to fit instead of getting cut off with an ellipsis.\n\nOriginal title — if present in the .nfo, it\'s shown under the localized title on the movie page (e.g. "Venom (Веном)").\n\nDirector filmography — tapping a director\'s name on a movie page opens a list of their other titles from your library.\n\nFix: resolved a hidden bug where bottom sheets (filters, add to list) could render at zero height in the Glass theme.</string>
+    <string name="changelog_1_4">Glass: real background blur. The Glass theme now uses real backdrop blur (the Haze library) instead of a flat translucent fill — the top bar, tabs, settings cards, and bottom sheets genuinely blur whatever scrolls behind them.\n\nImportant: minimum Android version raised to 12 (API 31) — real backdrop blur is technically impossible on older versions even with third-party libraries, so there was no point keeping two different looks around.</string>
+    <string name="changelog_1_3">Custom lists (playlists) — create, rename, delete, and add or remove any movies/shows.\n\nFavorites — a quick heart toggle on a movie\'s page, plus a badge on its poster.\n\nA Changelog section in Settings — the version list pulled straight from GitHub Releases.</string>
+    <string name="changelog_1_2">Fixed playback in external players other than VLC (e.g. KMPlayer) — the player used to open but couldn\'t read the file unless it had already been downloaded.\n\nSearch by .nfo hashtags (e.g. #pirates). Sort by rating. Per-category title counts in the filters. A warning when search is running with a forgotten active filter. The header logo resets filters/search. On the movie page — other parts of the same collection shown at the bottom.</string>
+    <string name="changelog_1_1">Downloads and automatic library refresh moved to WorkManager — they survive the app being closed, resuming continues from where it left off instead of starting over, and a progress notification is shown.\n\nClear connection/scanning error messages (wrong password, host unreachable, share not found) instead of raw technical text.\n\nThe app now checks GitHub for a new version on launch by itself. SMB scanning was sped up and fixed on real devices, and an app icon was added. The About section was updated.</string>
+</resources>

@@ -19,11 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.homecinema.library.R
 import com.homecinema.library.data.db.DownloadState
 import com.homecinema.library.data.db.MediaItemEntity
 import com.homecinema.library.data.db.MediaType
@@ -83,7 +85,7 @@ fun MediaPosterCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Favorite,
-                        contentDescription = "В избранном",
+                        contentDescription = stringResource(R.string.poster_favorite_cd),
                         tint = Color.Red,
                         modifier = Modifier.size(16.dp)
                     )
@@ -109,7 +111,7 @@ fun MediaPosterCard(
                     if (selected) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Выбрано",
+                            contentDescription = stringResource(R.string.poster_selected_cd),
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(14.dp)
                         )
@@ -125,7 +127,7 @@ fun MediaPosterCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Скачано",
+                        contentDescription = stringResource(R.string.poster_downloaded_cd),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -146,7 +148,7 @@ fun MediaPosterCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Visibility,
-                        contentDescription = "Просмотрено",
+                        contentDescription = stringResource(R.string.poster_watched_cd),
                         tint = Color.White,
                         modifier = Modifier.size(14.dp)
                     )
