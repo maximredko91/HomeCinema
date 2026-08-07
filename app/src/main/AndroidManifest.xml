@@ -33,10 +33,26 @@
         android:theme="@style/Theme.HomeCinema"
         android:usesCleartextTraffic="true">
 
+        <!-- Required for the on-device Media Enhancement API (play-services-media-effect-
+             enhancement) - lets it verify the installed Play Services version at runtime. -->
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+
+        <!-- Media Enhancement API's NPU/GPU inference needs these native libs declared to
+             initialize (undeclared -> GLOBAL_INIT_FAILED on supported hardware). Each is
+             optional so devices without a given vendor's library still install fine. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL-car.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL-pixel.so" android:required="false" />
+        <uses-native-library android:name="libGLESv2.so" android:required="false" />
+        <uses-native-library android:name="libGLESv3.so" android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden"
+            android:hardwareAccelerated="true"
             android:theme="@style/Theme.HomeCinema">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -129,6 +129,17 @@ dependencies {
     // WorkManager (persistent downloads + scheduled library rescans)
     implementation("androidx.work:work-runtime-ktx:2.11.2")
 
+    // On-device AI media enhancement (poster/video upscaling, tone mapping) - beta,
+    // gated behind a runtime device-support check since it needs a premium tensor-core
+    // SoC; see data/ai/ for the capability check this depends on.
+    implementation("com.google.android.gms:play-services-media-effect-enhancement:16.0.0-beta04")
+    // play-services-base transitively pulls in fragment 1.1.0, which lint flags as
+    // incompatible with registerForActivityResult() (needs >= 1.3.0) - force a real version.
+    implementation("androidx.fragment:fragment-ktx:1.8.2")
+    implementation("androidx.core:core-performance:1.0.0")
+    implementation("androidx.core:core-performance-play-services:1.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
     // XML parsing for .nfo (kotlinx or plain XmlPullParser is fine - using built-in XmlPullParser, no extra dep needed)
 
     debugImplementation("androidx.compose.ui:ui-tooling")
